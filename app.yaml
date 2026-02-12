@@ -1,0 +1,15 @@
+command:
+  - uvicorn
+  - src.backend.main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "$DATABRICKS_APP_PORT"
+
+env:
+  - name: DATABASE_URL
+    valueFrom: DATABASE_URL
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "071969b1ec9a91ca"
+  - name: STRATEGO_ENDPOINT_NAME
+    valueFrom: STRATEGO_ENDPOINT_NAME

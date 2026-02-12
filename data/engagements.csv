@@ -1,0 +1,320 @@
+Engagement Type,Status,Customer,Engagement Title,Actionable Outcome,AE,ASQ_URL,ASQ_ID,Timeframe,FY,Quarter,Related documents,Next Steps
+Customer Event,Completed,Telefonica,Secure Data Sharing for GenAI,,Melanie Kubach,,,Jun 2024,FY25,FY25Q3,,[complete]
+Customer Event,Completed,SAP,ILT Architecture Forum @ Labs India,,Robin Haeberle,,,Jul 2024,FY25,FY25Q3,,[complete]
+Focus,Completed,E.ON,Elevate Data & AI,"Engage and establish cadence with senior stakeholders (C-1, C-2)",Birgit Davidian,https://databricks.my.salesforce.com//lightning/r/ApprovalRequest__c/aEJVp000000I3FZOA0/view,aEJVp000000I3FZOA0,"Sep 24 - Mar 25
+(soft touch afterwards)",FY25,"FY25Q3, FY25Q4, FY26Q1",E.ON Scribble Space,"--- soft touch engagement ---
+[May 6] Org setup and design in data & ai transformation
+[May 5] SYNA lunch & learn (slides)
+[Apr 29] prep meeting SYNA lunch & learn
+[Apr 10] met Romina in Münster (DAIS, networking event May 8, exchanges w/ Zalando and Adidas)
+--- ended focus engagement ---
+[Mar 19] agreed on soft touch going fwd (relationship w 2 exec cadences until next EBC)
+[Feb 20] Account Planning
+[Feb 12] reached out to Rick re executive marketing series
+[Jan 16] engaged Head of Gov’nance (C-2) in Essen
+see meeting minutes here "
+One-off,Completed,Karl Storz,,,Joscha Beutel,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000II3JOAW/view,aEJVp000000II3JOAW,Sep 2024,FY25,FY25Q3,,[complete]
+One-off,Completed,Arag,,,Joscha Beutel,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000F37FOAS/view,aEJVp000000F37FOAS,Oct 2024,FY25,FY25Q3,,[complete]
+Focus,Completed,Continental,Data Program,Land & Expand across the entire business despite ongoing restructuring,Martin Gindler,https://databricks.my.salesforce.com//lightning/r/ApprovalRequest__c/aEJVp000000OCODOA4/view,aEJVp000000OCODOA4,"Oct 24 - Apr 25 
+(soft touch afterwards)",FY25,"FY25Q4, FY25Q3, FY26Q1",Conti Scribble Space,"#TODO prep ""AI native enterprise system of record"" PoV (this is cross account and industry long term vision)
+#TODO prep CFO POV (AI wedge on high personnel cost an stagnating productivity)
+#TODO influence Arne to submit Serverless for Security approval earlier
+--- soft touch engagement ---
+#TODO [June 10] set vision for MagicAOI use case
+[May 27] kept AWS at bay during architecture findins session (compete, FUD), identified new AI use case at Aumovio
+--- ended focus engagement ---
+[Apr 25] focused account planning in Munich (slides), handed over MDS to Magnus/Ana (next step is on-site workshop in FFM on Apr 30, enable MDS team, lock in pilot plants)
+[Apr 11] workshop w tech team MDL/MDS (2h, Magnus in lead), confirmed on-site meeting in FFM on April 30
+[Apr 1] first meeting again after several months of silence on the MDL (new: MDS) front - good and honest exchange w Stefan and Berthodl. Team needs help as they have both a skill and capa problem. Link with detials here. Planned workshops 11.4. (virtual) and 30.4. on-site
+[Mar 18] Brainstorming how to pull the biggest apparent use case forward (MDL) --> create a concept now that can be implemented when prio is up/back
+[Feb 26] program potential estimation here
+[Feb 10] cadence w ⅔ champions + team established
+[Jan 28] account planning
+[Jan 15] data products workshop (on-site)
+see meeting minutes here"
+One-off,Completed,Teambank,[One-off],,Axel Steinbeck,,,Oct 2024,FY25,FY25Q3,,[complete] helped secure the tech win against Snowflake
+Customer Event,Completed,Syngenta,AI Vanguards and DAIWT,,Adrian Groza,,,Nov 2024,FY25,FY25Q4,,[complete]
+One-off,Completed,Nordex,[One-off],"Engage with CIO and build a program to deliver on AI powered services to extend wind turbine lifetime encompassing platform, process and people.",Joana Erlmeier,https://databricks.my.salesforce.com//lightning/r/ApprovalRequest__c/aEJVp000000Nqh3OAC/view,aEJVp000000Nqh3OAC,Nov 2024,FY25,FY25Q4,,[complete]
+Customer Event,Completed,Atruvia,Keynote at Data + AI conference,,Axel Steinbeck,,,Dec 2024,FY25,FY25Q4,,[complete]
+Customer Event,Completed,Deutsche Börse,Data Science Community Meetup,,Benjamin Mueller,,,Dec 2024,FY25,FY25Q4,,[complete]
+One-off,Completed,Rossmann,Rescue Tech Win + Deal,,Peter Butsch,,,Jan 2025,FY25,FY25Q4,,"[Mar 28] Rossmann win-mail
+[complete] helped secure the tech win against Microsoft Fabric"
+One-off,Completed,EDEKA,Data & Analytics Platform RFI,"Emphasize transformative data & ai journey, discover new use cases and spark new ideas.",Felix Völker,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000Xa1VOAS/view,aEJVp000000Xa1VOAS,Feb 2025,FY26,FY26Q1,[Databricks FINAL Konzept] Datentransformation der EDEKA,"--- closed ---
+[Feb 13] on site meeting at customer site in Hamburg
+[Feb] prep RFI presentation together w IBM, acct team and SSA"
+One-off,Completed,Brenntag,[One-off],"Emphasize transformative data & ai journey, discover new use cases and spark new ideas.",Joana Erlmeier,,,Feb 2025,FY26,FY26Q1,,[complete]
+Focus,Completed,Allianz,Data Platform as a Service (DPaaS) Expansion,Sharpen Allianz Direct’s DPaaS offering and enable its expansion throughout the Allianz group.,Leonie Hollstein,https://databricks.lightning.force.com//lightning/r/ApprovalRequest__c/aEJVp000000UkAIOA0/view,aEJVp000000UkAIOA0,Feb 25,FY26,FY26Q1,Data Platform as a Service (DPaaS),"--- closed ---
+[Apr 4] Allianz Direct seems to get boxed in by corp IT (ADP) and there's a request by their senior leader (Marco Raabe) for help in working out their data, ai and platform strategy. Tbc on site meeting Apr 14.
+[Feb 26] on-site workshop with Allianz Direct and Deloitte"
+One-off,Completed,Zalando,"Account Fitness Program
+Strategic Growth Program",Strengthened strat. Partnership with defined growth and modernization program in place.,Luba Bohad,https://databricks.my.salesforce.com//lightning/r/ApprovalRequest__c/aEJVp000000HQHROA4/view,aEJVp000000HQHROA4,Mar 25,FY26,FY26Q1,Zalando - Strategy Workshop Prep Doc March 2025,"--- closed ---
+[4 Apr] waiting for follow up meetings re new use cases hunting (cyber, HR, ...) and SAP - checked in w Luba
+[Mar 20] QBR in Berlin (UC path forward in parallel with new business hunting grounds)"
+Focus,Ongoing,Deutsche Börse,Vision for the AI-centered stock exchange,"data & ai strategy, impact framework and MVP fast track program",Benjamin Mueller,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000qyT7OAI/view,aEJVp000000qyT7OAI,Apr - Oct 25,FY26,"FY26Q2, FY26Q3",Deutsche Börse,"#TODO submit DAIS talk (abstract)
+#TODO follow up w Daniel B, Lars B, Jan S (slides) (loop in Lars George and Chris Grabiel)
+[Feb 6] run Aymon, Markus, Kevin, Fouad through slides / POV for Daniel B follow up - agreed and ready for follow up
+[Jan 14] follow up w Jan S re DAIS, AI Day FFM, CIO Forum
+[Jan 8] prep for Daniel B follow up w Abed, Fouad, Jan (notes)
+[Jan 7] caught up w Abed and got some more insights (notes)
+[Dec 18] CDTO Meeting Daniel Besse and team (slides and briefing)
+[Dec 17] facilitated intro between Jan S and Robin Sutara re shaping CDO role
+[Dec 17] Briefing call for Daniel Holz for Daniel Besse meeting
+[Dec 16] presented MVP Fast Track in FE EMEA All Hands (slides)
+[Dec 9] long convo w Jan S re new role, politics etc and productive meeting w GCP account team in Frankfurt to discuss AI Interop Motzvorlage, MVP Fast Track and next steps
+[Dec 1] caught up w Chris Grabiel re ""AI Control Plane"" and added DBG testimonials to Agent Mesh doc
+[Dec 1] follow up w Markus et al re AI Layer interop (didn't go well, that was an orchestrated takedown)
+[Nov 24] CIO Meeting w Daniel --> details + notes in briefing doc
+[Nov 19] briefing call for Daniel H re CIO Meeting and account exchange w GCP team
+[Nov 18] intro w Benjamin K re AI Layer Interop (Motzvorlage) - he is AI COE (CTO org) and this went well on the working level
+[Nov 5] planning next steps w Ben M (Munich office, account plan)
+[Nov 4] Meeting w Julian Z et al at DAIWT to discuss MVP Fast Track v2
+[Oct 30] follow up w/ Markus/Kevin re AI Layer interop - good feedback re Motzvorlage
+[Oct 21] follow up w/ Markus/Kevin re AI Layer interop, built Motzvorlage and hit a nerve
+[Oct 16] EB T&C Meeting (T Book), breakthrough in multi-partner approach in AI layer, TB positioning MVP Fast Track in ExCo, use case teams excited and good list of next steps and plan EBC in Feb/Mar - notes and next steps here
+[Oct 15] prepared DAIS submission draft for review here
+[Oct 13] briefing call for Daniel Holz re readout meeting (see doc and plan to position partnership)
+[Oct 7] wrapped up MVP fast track sprint and coordinated w PS re road to prod (slides)
+[Oct 1] innovation & inspiration session w customer example (CCH) + office hour + on-site planning
+[Sep 23] innovation & inspiration session re kasal + office hour; consolidated into this doc while Tobi/Henryk are working into the FAQ doc; confirmed CCH for innovation session, fought some bugs/hickups, followed up on Lakeflow Connect; planned for next week's onsite
+[Sep 17] plan for phase 2 (road to production + more use cases) w Jan
+[Sep 16] innovation & inspiration session re AI/BI + office hour (see progress per use case)
+[Sep 10] innovation/inspiration session + office hour
+[Sep 4] powerful first demo of kasal in DBG workspace & first enablement session; several troubleshooting drills
+[Sep 2] successful AI speedboats kick-off + enablement; met M Buschky and Kevin re data platform strategy
+[Sep 1] aligned internally to safeguard most promising use cases w/ SSA support (Henryk) and created slack channel
+[Aug 28] reviewed use cases and presented program outline to the team (slides)
+[Aug 20] aligned internally w Patrick on how to staff the AI Fast Track program and agreed that we can mostly shoulder this from the SA team with Tobi once he's back
+[Jul 1 - Aug 19] Jan advertised AI speedboats program, curated 8 use cases and got leadership buy in (board member presentation on Oct 16), while Abed did very little to provide the right environment (workspace in Azure West Europe w Databricks Apps and file upload enabled); looks like we're mostly set to get started next week.  
+[Jul 4] presented DAIS Recap to extended team (organized by Jan, slides) and agreed w Jan to push out by at least a week based on Abed's feedback on what's realistic re timeline and workspace (w DB Apps enabled)
+[June 26] planned next steps w Jan (doc)
+[June 24] met Jan and team to work on strategy and MVP program. 
+[June 17] alignment w Jan, Hannes and Alireza re next steps
+[June 12] discussed agentic AI capabilities and MVP program in Q2/3
+[June 09] met Jan at DAIS and discussed strategy, vision and next steps
+[May] aligned w acct team on next steps (waiting for next steps after DAIS)
+[Apr 30] sent over a PoV and material for CFO meeting - waiting for feedback and next steps
+[Apr 28] good follow up w Jan, Lars, Alireza etal  re KPIs and Organisational setup on-site (slides) as they prep for CFO meeting on May 13th
+[Apr 24] internal prep meeting with acct team
+[Apr 4] confirmed follow up w Jan Stiebig re KPIs and Organisational setup for Apr 28 (this incl. Lars Bolonka)
+[Mar 26] insightful follow-up on-site in FFM with head of data & analytics re transformation program and their missing framework to quantify impact of data + ai
+[Mar 24] good session with a very engaged audience of 10+ senior IT leaders re SAP BDC
+[Mar 18] internal prep meeting (attendance will be CTO and CCO)
+[Feb 25] agreed on session and date"
+One-off,Abandoned,IWB,tbc,,Angus Lauder,,,Mar 2025,FY26,FY26Q1,,"-- abandoned --
+[Apr 4] CDO declined meeting invite, likely not going to proceed with this one
+[Mar 24] brainstorming with acct team, suggested a few approaches how to engage the CDO and waiting for feedback whether one sticks
+[Mar 17] account team reached out"
+One-off,Abandoned,Uniper,Databricks and Snowflake,Pave the ground for coexistence and potentially a take-out down the road with a strategic PoV to their IT leadership team,Frank Tilger,,,tbc,FY26,FY26Q2,,"--- closed ---
+[Apr 3] Frank reached out with request - qualifying and discussing the details"
+One-off,Abandoned,Aldi Nord,EBC in Amsterdam,,Ralf Sauer,,,May 2025,FY26,FY26Q2,,"-- abandoned --
+[Apr 25] EBC canceled due to org changes at Aldi Nord (new CIO)
+[Apr 10] updated on EBC agenda May 6/7 (incl SAP BDC)
+[Mar 17] planning w AE, suggested structure, agenda and (exec) guests
+[Feb 26] agreed on session, date and high level topic w Ralf"
+One-off,Completed,Mercedes,Speak at D.Camp,,Christian Wagner,,,May 2025,FY26,FY26Q2,MO360-D.Camp_20250512,"--- closed ---
+[May 12] delivered keynote at event in Esslingen, planted ideas around ESR, composable AI and value tracking / incentives in a data mesh (follow up w/ Tabea)
+[May 8] finished slides and sent over to Markus
+[Apr 25] aligned w Christian
+[Apr 24] Mario reached out"
+One-off,Abandoned,AVOLTA,CFO Days in Copenhagen,present a visionary PoV to corp CFOs and their IT counterparts,Sarah Scholz,,,May 2025,FY26,FY26Q2,,"--- abandoned ---
+[May 9] alignment with customer + account team and agreed to not go since the audience changed and we didn't get a full session on site anymore
+[Apr 3] Sarah reached out and asked whether I could support - details tbc"
+One-off,Completed,DATEV,CIO Meeting,tbc,Lea Marie Rupp,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000qtjZOAQ/view,aEJVp000000qtjZOAQ,June 2025,FY26,FY26Q2,Datev: Meet the CIO Lars Riedel,"--- closed ---
+[Jun 2] CIO meeting (virtual), use case discovery, next step workshop (migration + ideation) in July and joint workshop w SAP in Q3 (see minutes in below doc)
+[May 20] prep CIO meeting AE (Lea) - doc
+[Apr 14] Lea reached out"
+Focus,Ongoing,Deutsche Telekom,Land Deutsche Telekom,,Inga Roos,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000rXDxOAM/view,aEJVp000000rXDxOAM,July 2025,FY26,FY26Q2,Deutsche Telekom Strategist Doc,"#TODO [Apr ] commercials, decision, project plan
+#TODO [Mar ] execute POC
+#TODO [Feb ] plan POC
+[Feb 3-5] deep dives (DE, AI/BI, UC) - Leonhard Zacharias is in the lead now
+[Jan 30] prep meeting with Leo/Inga DTDL - Databricks Overview_202602
+[Jan 22] discovery call w Harsh and Vikas (notes) and phasing in Leonhard as new account SA 
+[Dec 15] use case discovery call w Karthick re broadband / home devices - handing over to acct team
+[Nov 27] focused acct planning in Hamburg
+[Nov 13] EBC in San Francisco w DTDL leadership team (prep, briefing, slides, notes)
+[Nov 5] catch up re EBC w Inga and structure prep work
+[Oct 8] played a few more ideas wInga Roos re EBC and aligned on setup
+[Sep 25] customer requested to push EBC out to November 13
+[Sep 19] prepared briefing doc, agenda and slides - alignment on logistics for Oct 9th w Ida
+[Sep 17] CIO org requested EBC 2nd week of October in SFO
+[Sep 4] Ahmed feedback that working on a decision, but no details shared (Inga in lead)
+[Jul 28] Databricks at DT follow up workshop (hybrid, AI, roadmap, ...) 
+[Jul 25] gathered insights from Ultra Tendency, Dael and Layla and finalized deck
+[Jul 2] met VP data strategy in Bonn to discuss strategy, roadmap, potential collaboration --> follow up workshop planned to look into hybrid cloud scenarios and equip them for their decision on cloud strategy (Inga following up w qualification). Delivered Panel and met Tech & Innovation Board Member (C Nemat)
+[Jun 13] prepared talk track and submitted to organizers
+[May 27] account brainstorming and planning w Inga
+[Apr 29] Inga reached out re event and keynote"
+One-off,Completed,Henkel,Keynote Henkel Day,,Felix Fitzner,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000rEeMOAU/view,aEJVp000000rEeMOAU,July 2025,FY26,FY26Q2,Henkel_Day_20250708,"--- closed ---
+[Jul 8] delivered keynote at Henkel event on site together w Barry Dauber and Daniel Holz
+[Jul 4] finalized talk track and keynote
+[Jun 25] aligned w team and Barry re agenda
+[May 22] aligned with account team (Felix, Timo)
+[Apr 30] Felix reached out re event and keynote"
+Focus,Completed,Viessmann,Self Service Data Platform,develop programatic approach to help the team fast track their new data platform to business value,Frank Tilger,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000tHoDOAU/view,aEJVp000000tHoDOAU,Jul - Oct 25,FY26,FY26Q3,Viessmann - Self-Service,"#TODO [Feb 4] self service playbook workshop onsite (doc wip)
+--- closed ---
+#TODO [Dec ] submit DAIS talk w Marina
+[Okt 15] prepared DAIS submission draft here
+[Sep 5] reached out to Marina re DAIS submission proposal for 2026
+[Aug 22] checked in w Acct Team, working on data product certification (Martin) and MVP use case (Frank, Martin). No action required from me for now.
+[Jul 24] meeting w platform, sales and marketing teams to discuss MVP on self service platform
+[Jul 14] follow up re data product certification, publishing and ops model
+[Jul 10] follow up re MVP Fast Track, scope and next steps
+[Jul 7] scoping call w Viessmann team (slides)
+[Jul 4] met Marco (customer side) and got him to buy into the idea and approach how to find a common ground betwen the different opinions in the team (""should business users be allowed to publish data products?"" --> find a good balance and work out a certification process)
+[Jul 1] aligned w Marina and developed a plan
+[Jun 27] alignment w acct team (Frank, Martin, Manuel) and planned approach + next steps (doc)
+[Jun 24] Marco reached out"
+Focus,Completed,ZF,Central ZF Data Layer,,Aiman El Masri,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000wCDhOAM/view,aEJVp000000wCDhOAM,Aug - Oct 25,FY26,FY26Q3,ZF Strategist Doc,"--- closed ---
+[Nov 25] follow up on-site workshop w Denis H in Stuttgart
+[Nov 17] follow up meeting w Vinoth re data strategy at ZF
+[Nov 12] on-site workshop w Denis H in Munich re independent AAM data platform (see notes with whiteboard pictures and slides)
+[Nov 7] Aiman informed about independent AAM data platform (planned meetings w Denis H)
+[Oct 29] Follow up re AI at ZF w Georg + team
+[Oct 24] Follow up re ZF Data Strategy w Vinoth
+[Oct 23] AI roadmap and vision for Georg + team AI for ZF_20251022
+[Oct 22] sync meeting re AI at ZF w Georg
+[Oct 17] ZF Data Strategy iteration w Vinoth --> agreed on bi-weekly cadence
+[9 Oct] meet customer and plan next steps in Munich (slides and proposed next steps here)
+[Sep 17] focused account planning in Munich
+[Aug 20] met Vinoth and planned on-site workshop in October
+[Jul 9] aligned and planed w account team (see doc)
+[Jun 25] Patrick and Marco reached out (sfdc use case) - prepared 1 pager for engagement"
+One-off,Completed,KSB,Digital Products & Services Platform,,Lea Marie Rupp,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000000wP2rOAE/view,aEJVp000000wP2rOAE,Jul 25,FY26,FY26Q3,KSB_QBR_On-Site_Lea,"--- closed ---
+[Aug] follow up w customer and going to close engagement
+[Jul 24] on-site QBR (slides) with management (incl CDO), good feedback, next steps 1) refine and prioritize use cases 2) review data strategy (end 2024 w Fraunhofer)
+[Jul 23] disco w Thomas H (Head of DPSP), we have a good story and customer really faces a challenge in their transformation / change mgmt
+[Jul 22] prep meeting w customer (doc) and pushed for alignment w head of DPSP in IT
+[Jul 15] first meeting w customer and discovery for me
+[Jun 26] Lea reached out w ask to show ""art of possible"" vision at QBR Jul 24 (on-site)"
+One-off,Abandoned,Obi,,,Fabian Luithle,,,Aug 25,FY26,FY26Q3,Obi Strategist Doc,"--- closed ---
+#TODO [Oct 23] review data & ai strategy with customer -- this never took place, abandoning enagement
+[Oct 13] Fabian had to move follow up meeting with customer multiple times
+[Sep 3] good meeting w Pascal re AI, 2 follow up meetings (agents and with extended team) - notes and slides
+[Aug 26] prep call for OBI meeting re AI use cases next week
+[Jul 23] alignment w Fabian/Tanya - spontaneous account coaching / planning
+[Jul 17] Fabian reached out and shared docs / notes from meeting w Rob Saker and customer
+https://docs.google.com/presentation/d/1S1fsoCII6CDbO3x8Q_usO0UfoLl8eJ71ufQIm_cAv7c/edit?usp=sharing
+https://docs.google.com/document/d/1d6XSzI32hLAc02w7gXEhu5lEyEGDKb-WXav2zI_UDho/edit?usp=sharing
+https://docs.google.com/presentation/d/1EUF0N8YPk8Mc8blHYdt33ujth3CUSwCSkhApDtBDDFQ/edit?slide=id.g37061d7e630_9_5360#slide=id.g37061d7e630_9_5360"
+Focus,Completed,Telefonica,Establish Databricks in UDM above GCP and Azure,,Inga Roos,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp0000010sJBOAY/view,aEJVp0000010sJBOAY,Aug 25,FY26,FY26Q3,2025-08-05 Telefonica,"--- closed ---
+[Jan 2026] RfP presentations by GCP and MSFT, hand over worked well and account team driving all efforts now
+[Dec 9] planning meeting w GCP and informed that Laura/Lisa will be in the lead now
+[Dec 5] RFP released, planning meeting w MSFT and informed that Laura/Lisa will be in the lead now
+[Dec 2] aligned w Olga and rest of team - informed that I'll start to step back due to RFP timeline, PTO etc
+[Dec 1] alignment w MSFT, established that Direct Lake is out of discussion (see email)
+[Nov 28] sync re Fabric Direct Lake w Andrey and Diego (addl ammunition)
+[Nov 24] cleaning up fallout from last Friday's meeting - coached MSFT team to stick to ""Azure simple story"" - think it resonated now
+[Nov 21] MSFT presented to TEF and created more confusion than answered questions - DirectLake was perceived poorly and basically all my predictions turned true 
+[Nov 20] moderated prep meeting between MSFT GBBs and Diego - argument re DirectLake
+[Nov 18] briefing for Diego (SSA) and onboarding Laura
+[Nov 17] aligned on Azure proposal for UDM (meeting on Friday) - coaching team not to lead with Dire
+[Oct 29] CTEO Meeting in Munich, coached MSFT and briefed Daniel H on talk track (PowerPoint slides)
+[Oct 28] worked out ""simple story"" on Azure, tuned slide deck w Daniel O for Mallik meeting tomorrow (value and customer references slides)
+[Oct 27] sync meeting w Daniel H and first joint customer workshop w MSFT
+[Oct 24] first prep meeting w MSFT, challenged Fabric centric architecture, tight timeline prep for CTEO meeting Oct 29 in Munich
+[Oct 23] heard of escalation through MSFT and wrote an assessment
+[Sep 17] focused account planning in Munich, haven't heard much from customer in meantime
+[Aug 28] prepared structure and (opinionated) questions for an Entscheidungsvorlage (doc) and governance deck
+[Aug 26] Exec Meeting with Till to discuss progress (slides)
+[Aug 21] follow up workshop with tech team to discuss Motzvorlage
+[Aug 5] on-site workshop in Munich, good feedback, set vision (slides), answered questions (doc), follow up tech and exec planned (notes)
+[Aug 4] alignment with account team and leadership
+[Aug 3] formulated strategy for on-site meeting based on SWOT analysis
+[Jul 25] Lisa and Patrick reached out"
+Tbc,Abandoned,EnBW,Default Data & AI Platform,,Benjamin Jetter,,,Aug 25,FY26,FY26Q3,EnBW Strategist Doc,"--- closed ---
+#TODO [Oct] follow up on 2+2 architecture topics and work on unified storage + governance vision
+[Sep 2] architecture session re open data platform and Snowflake interop - slides and notes - pretty hefty roast esp by Heiko, who right after went on PTO. Structured follow up, waiting for feedback
+[Aug 26] first virtual meeting with Heiko, discussed scope, showed advisory structure
+[Jul 30] Bene reached out re meeting w Head of Strategy & Enterprise Architecture"
+Tbc,Abandoned,Atruvia,AI Fast Track,,Axel Steinbeck,,,,,,,"--- closed ---
+[Oct 30] disqualified use case together w acct team and Julian/Merve
+[Oct 23] meeting w Markus Raster to discuss use case (suspect lack of urgency and capacity)
+[Sep 22] account team reached out - started this doc"
+Tbc,Not started,Siemens,Data Culture,,Joana Erlmeier,,,,,,https://docs.google.com/document/d/1B0ACaZfb5sLiBXjL6TPqUVw1lHhdDi-0J57MJ2TyMZU/edit?tab=t.0,"[Nov 7] get to know and discussed ideas re Siemens w Wolfgang O
+[Nov 5] ideas for account strategy w Joana (see notes)
+[Sep] ideas for account strategy w Joana (Elevate Commit in London)
+[Aug] Joana reached out"
+One-off,Completed,Trumpf,,,Martin Gindler,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001BrejOAC/view,aEJVp000001BrejOAC,,,,Trumpf,"--- closed ---
+[Nov 10] follow up meeting w Cornelius and team
+[Oct 27] vision & strategy session w Cornelius (head of data & analytics) and team (slides)
+[Oct 24] prep meeting w Trumpf contact (Philip?)"
+One-off,Completed,Schaeffler,,,Sebastian Fiedler,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001AyiHOAS/view,aEJVp000001AyiHOAS,,,,Schaeffler Scribble Space,"--- closed ---
+[Nov 24] Schaeffler decided not to move fwd in their Multi Cloud Data Platform and keep things as they are
+[Nov 14] presented commercial proposal (sizing)
+[Oct 27] team working on custom demo videos and detailed answer to Schaeffler's questions (Ju, Alex O et al) doc
+[Oct 24] troubleshooting the failed demo, managing expectations and stakeholders, coming up w a plan to turn it around (see notes in Schaeffler doc)
+[Oct 23] presented to Schaeffler (didn't go well)
+[Oct 20] aligned on demo deck"
+One-off,Completed,Mercedes,Keynote MB Learning Day,,@christian Wagner,https://databricks.my.salesforce.com//lightning/r/ApprovalRequest__c/aEJVp0000019u0nOAA/view,aEJVp0000019u0nOAA,,,FY26Q3,MB Learning Day_20251022,"--- closed ---
+[Oct 22] delivered Learning Day Keynote
+[Sep 9] Kevin reached out"
+One-off,Ongoing,BSH,Vision for Unified Data Platform,,Dietmar Holst,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001GVs5OAG/view,aEJVp000001GVs5OAG,,,,BSH Bosch Haushaltsgeräte,"[Jan 30] internal plan for next steps w/ FE team - Rosina/Gaby in lead (yesterday was good!)
+[Jan 29] on site workshop to kick off data platform POC OSS_Data AI_BSH_20260129 and Cursor Scribble
+[Jan 22] check in w Marek re on-site workshop
+[Jan 19] prep meeting internal - preparing vision session slides
+[Dec 10] workshop to plan structure for Data Platform POC next year
+[Dec 8] internal prep for workshop on Wednesday
+[Nov 4] Exec Meeting at DAIWT to discuss BSH unified data & ai platform and POC in FY27
+[Oct 24] Briefing for DAIWT Exec Meeting"
+One-off,Completed,Daimler Truck,Panel for Community Day,,Stanislava Goranova,https://databricks.my.salesforce.com/aEJVp000001CWGT,aEJVp000001CWGT,Nov 25,FY26,FY26Q4,Daimler Truck Truck_20251127,"--- closed ---
+[Nov 27] presented to 150 participants at Daimler Truck"
+One-off,Abandoned,Vienna Insurance Group VIG,tbc,,Michael Osterhage,,,,,,,
+Focus,Ongoing,Stroer,Stroer Ad Tech Platform,,Florian Maldoner,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001DVOnOAO/view,aEJVp000001DVOnOAO,,,,Stroer Strategist Doc,"--- closed ---
+[Feb 10] Norman and Engg feedback not interested right now (slack for details)
+[Jan 13] on site follow up in Munich re Platform Intelligence (slides incl. Motzvorlage)
+[Dec 15] internal sync re next steps and workshop prep
+[Dec 10] on site meeting in Munich to discuss Ströer Platform Intelligence (notes)
+[Nov 4] Exec meeting at DAIWT w VP of AdTech platform et al to discuss Data Intelligence at Ströer"
+One-off,Completed,E.ON,Vision for Streaming Day,,Birgit Davidian,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001F4vZOAS/view,aEJVp000001F4vZOAS,Jan 26,FY26,FY26Q4,E.ON_StreamingDay_20260115,"---  closed ---
+[Jan 15] delivered keynote and breakout session - good feedback 
+[Jan 7] followed up on Streaming Day agenda, slides, etc w Kai Waehner (Field CTO, Confluent) and team
+[Dec 3] aligned on story line w Steffen (Field CTO, Confluent)
+[Nov 4] Birgit reached out"
+One-off,Not started,AWIN,,,Joscha Beutel,,,Dec 26,FY27,,AWIN Databricks: Joined Vision,"#TODO [Feb ] work on data strategy w customer
+[Jan 27] internal prep and sync re next steps
+[Dec 15] helped get the deal over the line with a meeting to present mutual action plan and approach to building data & AI strategy
+[Dec 10] aligned w acct team and prepared one slide for meeting next week
+[Dec 9] Tanya reached out"
+One-off,Not started,Limango,,,Florian Maus,,,,FY27,,Vorbereitung Limango Strategie Session,"[Jan 13] Follow up after Florian met w founder and CFO, brainstormed agenda for on site workshop (doc)
+[Dec 11] Florian reached out"
+One-off,On hold,BASF,Speak at AI in Action Event (BASF Coatings),,Katja Rees,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001M6vpOAC/view,aEJVp000001M6vpOAC,,FY27,,,"--- on hold ---
+#TODO [Mar 13] speak at ""Power of AI"" event
+[Feb 5] postponed due to restructuring
+[Feb 2] intro meeting w customer (Lennart)
+[Jan 22] Katja and Hong reached out"
+One-off,Completed,Viessmann,Scalable Delivery Model,,Frank Tilger,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001Kh6fOAC/view,aEJVp000001Kh6fOAC,,FY27,,,"[Feb 4] on site workshop (repo, app), planned for FY27 priorities, aligned DAIS submission w Marina, possible follow up re AI w exec leadership
+[Jan 30] prep session internal (agenda), working on Viessmann_OS Data & AI_Vision_20260204 and Cursor Scribble mockup app
+[Jan 8] Frank reached out"
+One-off,Ongoing,Mercedes,MB AI for Data Management,,Christian Wagner,https://databricks.lightning.force.com/lightning/r/ApprovalRequest__c/aEJVp000001MUenOAG/view,aEJVp000001MUenOAG/,,FY27,,Mercedes Benz AI For Data Management,"#TODO [Feb 9] meet Patrick and presented the story IT Journal new 2025
+[Feb 6] second dry run (internal) and logistics
+[Feb 5] first dry rund (internal)
+[Feb 2] iterated on deck, story and prepared for first dry run (see email thread and MB AI Messaging)
+[Jan 30] Christian/Irfan/Sai reached out, pulled in Joshua Green and first brainstorming in the afternoon, created Mercedes Benz AI For Data Management"
+,,Würth,SAP Offload,,,,,,,,,"[Jan 30] customer meeting, good discussion, follow up w success stories next week (4 Feb)
+[Jan 27] internal prep meeting (agenda, talk track, participants, goals)
+[Dec] Matthias/Tarzi reached out"
+,,OTP,HR use case inspiration / brainstorming,,,,,,,,,[Feb 6] Isti / Xintia reached out
+,,MOL,Genie use case inspo / brainstorming,,,,,,,,,[Feb 6] Isti / Xintia reached out
+,,Siemens Healthineers,Data Day Keynote,,,,,,,,,[Feb 4] Joana reached out
+,,SAP,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,Viessmann,,,,,,,
+,,,,,EDEKA IT Stiftung & Co. OHG,,,,,,,
+,,,,,Continental - ContiTrade,,,,,,,
+,,,,,KSB,,,,,,,
+,,,,,AUMOVIO Germany GMBH - Ex Continental Automotive Technologies GmbH,,,,,,,
+,,,,,Continental Reifen Deutschland GmbH,,,,,,,
+,,,,,Telefónica Germany,,,,,,,
+,,,,,MOL Nyrt.,,,,,,,
+,,,,,Mercedes-Benz - Global HQ,,,,,,,
+,,,,,ContiTech Deutschland GmbH,,,,,,,
+,,,,,Deutsche Börse Group,,,,,,,
+,,,,,Henkel AG & Co. KGaA,,,,,,,
+,,,,,DATEV eG,,,,,,,
+,,,,,Ströer Media Solutions GmbH,,,,,,,
+,,,,,Daimler Truck,,,,,,,
+,,,,,Benecke-Kaliko,,,,,,,
+,,,,,E.ON,,,,,,,
+,,,,,Continental AG - Ultimate Parent,,,,,,,
+,,,,,ZF Friedrichshafen AG,,,,,,,
+,,,,,Deutsche Telekom AG,,,,,,,
