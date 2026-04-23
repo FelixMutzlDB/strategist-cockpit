@@ -45,6 +45,24 @@ export function listEngagements(params?: {
   return fetchJSON(`/engagements/${qs ? `?${qs}` : ""}`);
 }
 
+export function createEngagement(engagement: Omit<Engagement, "id">): Promise<Engagement> {
+  return fetchJSON("/engagements/", {
+    method: "POST",
+    body: JSON.stringify(engagement),
+  });
+}
+
+export function updateEngagement(id: number, engagement: Partial<Engagement>): Promise<Engagement> {
+  return fetchJSON(`/engagements/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(engagement),
+  });
+}
+
+export function deleteEngagement(id: number): Promise<void> {
+  return fetchJSON(`/engagements/${id}`, { method: "DELETE" });
+}
+
 // --- Projects ---
 export interface Project {
   id: number;

@@ -24,11 +24,13 @@ class EngagementCreate(EngagementBase):
     customer: str
 
 
-class EngagementOut(EngagementBase):
-    id: int
+class EngagementUpdate(EngagementBase):
+    pass
 
-    class Config:
-        from_attributes = True
+
+class EngagementOut(EngagementBase):
+    model_config = {"from_attributes": True}
+    id: int
 
 
 # --- Project Schemas ---
@@ -45,11 +47,9 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectOut(ProjectBase):
+    model_config = {"from_attributes": True}
     id: int
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 # --- Chat Schemas ---

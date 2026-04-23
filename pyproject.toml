@@ -15,6 +15,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "httpx>=0.28.0",
     "pandas>=2.2.0",
+    "pytest>=8.0.0",
 ]
 
 [build-system]
@@ -24,3 +25,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests requiring Databricks credentials",
+]

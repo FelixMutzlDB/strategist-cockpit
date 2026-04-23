@@ -33,25 +33,49 @@ export function StrategistCanvas({ onBoxClick }: StrategistCanvasProps) {
     <div className="rounded-xl border bg-card p-6 space-y-4 overflow-x-auto">
       {/* Goal column + Main content */}
       <div className="flex gap-4">
-        {/* Left: Goal */}
-        <div className="shrink-0 w-36 space-y-2">
-          <div className="rounded-lg border-2 border-red-200 bg-red-50 p-3 space-y-1.5">
-            <div className="text-xs font-bold text-red-700 uppercase">Goal</div>
-            <div className="text-xs text-red-900 font-medium leading-snug">
+        {/* Left: Goal + Archetypes */}
+        <div className="shrink-0 w-44 space-y-2">
+          <div className="rounded-lg border-2 border-slate-200 bg-slate-50 p-3 space-y-1.5">
+            <div className="text-xs font-bold text-slate-700 uppercase">Goal</div>
+            <div className="text-xs text-slate-900 font-medium leading-snug">
               Databricks as the DEFAULT Data & AI Platform
             </div>
-            <div className="space-y-0.5 text-[10px] text-red-700">
-              <div>#1 Unity Catalog</div>
-              <div>#2 Dominate DWH</div>
-              <div>#3 Lakeflow ETL</div>
-              <div>#4 Lead w/ Industry</div>
-              <div>#5 Win Enterprise AI</div>
+            <div className="space-y-0.5 text-[10px] text-slate-600">
+              <div className="font-semibold">#1 AI/BI Genie</div>
+              <div className="font-semibold">#2 Lakebase</div>
+              <div>Unity Catalog</div>
+              <div>Dominate DWH</div>
+              <div>Lakeflow ETL</div>
+              <div>Lead w/ Industry</div>
+              <div>Win Enterprise AI</div>
             </div>
           </div>
-          <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 space-y-1">
-            <div className="text-xs font-bold text-teal-700">Advisor</div>
-            <div className="text-[10px] text-teal-900 leading-snug">
-              Excellence in particularly challenging or complex customer engagements
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+            <div className="text-xs font-bold text-slate-700 uppercase">Archetypes</div>
+            <div className="text-[10px] text-muted-foreground leading-snug mb-1">
+              Role designations guiding time outside direct account work
+            </div>
+            <div className="space-y-1.5">
+              <a href="https://docs.google.com/presentation/d/1o8s_JZuIMqAQ_iHAkinINxntrvGJJbprFKmP3Nf6bOk/edit#slide=id.g3421452484c_0_5" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border bg-teal-800 px-2 py-1.5 hover:opacity-90 transition-opacity cursor-pointer">
+                <svg className="h-4 w-4 shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span className="text-[10px] font-medium text-white leading-tight">Organizer</span>
+              </a>
+              <a href="https://docs.google.com/presentation/d/1o8s_JZuIMqAQ_iHAkinINxntrvGJJbprFKmP3Nf6bOk/edit#slide=id.g3421452484c_0_10" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border bg-rose-900 px-2 py-1.5 hover:opacity-90 transition-opacity cursor-pointer">
+                <svg className="h-4 w-4 shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span className="text-[10px] font-medium text-white leading-tight">Builder</span>
+              </a>
+              <a href="https://docs.google.com/presentation/d/1o8s_JZuIMqAQ_iHAkinINxntrvGJJbprFKmP3Nf6bOk/edit#slide=id.g3421452484c_0_15" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border bg-red-500 px-2 py-1.5 hover:opacity-90 transition-opacity cursor-pointer">
+                <svg className="h-4 w-4 shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <span className="text-[10px] font-medium text-white leading-tight">Product</span>
+              </a>
+              <a href="https://docs.google.com/presentation/d/1o8s_JZuIMqAQ_iHAkinINxntrvGJJbprFKmP3Nf6bOk/edit#slide=id.g3421452484c_0_20" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border bg-emerald-600 px-2 py-1.5 hover:opacity-90 transition-opacity cursor-pointer">
+                <svg className="h-4 w-4 shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                <span className="text-[10px] font-medium text-white leading-tight">Industry</span>
+              </a>
+              <a href="https://docs.google.com/presentation/d/1o8s_JZuIMqAQ_iHAkinINxntrvGJJbprFKmP3Nf6bOk/edit#slide=id.g3421452484c_0_25" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border bg-teal-600 px-2 py-1.5 hover:opacity-90 transition-opacity cursor-pointer">
+                <svg className="h-4 w-4 shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span className="text-[10px] font-medium text-white leading-tight">Advisor</span>
+              </a>
             </div>
           </div>
         </div>

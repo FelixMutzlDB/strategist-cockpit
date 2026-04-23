@@ -13,11 +13,11 @@ const tiles = [
     iconColor: "text-blue-600",
   },
   {
-    title: "Impact Dashboard",
+    title: "Engagements",
     description:
-      "Track engagements and measure impact across fiscal years, territories, and engagement types.",
+      "Track, manage, and analyze engagement records across fiscal years, types, and accounts.",
     icon: BarChart3,
-    to: "/impact",
+    to: "/engagements",
     color: "from-emerald-500/10 to-teal-500/10",
     iconColor: "text-emerald-600",
   },

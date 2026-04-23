@@ -1,13 +1,16 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.pool import StaticPool
 
 from src.backend.config import settings
 
 connect_args = {}
+engine_kwargs: dict = {"echo": False}
 if settings.database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+    engine_kwargs["poolclass"] = StaticPool
 
-engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+engine = create_engine(settings.database_url, connect_args=connect_args, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

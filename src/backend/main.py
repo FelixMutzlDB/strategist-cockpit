@@ -1,5 +1,5 @@
-import os
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +12,16 @@ from src.backend.routers import engagements, projects, canvas, chat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Strategist Cockpit", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized.")
+    yield
+
+
+app = FastAPI(title="Strategist Cockpit", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,13 +36,6 @@ app.include_router(engagements.router)
 app.include_router(projects.router)
 app.include_router(canvas.router)
 app.include_router(chat.router)
-
-
-@app.on_event("startup")
-def on_startup():
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("Database initialized.")
 
 
 @app.get("/api/health")

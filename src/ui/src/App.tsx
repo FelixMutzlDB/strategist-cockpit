@@ -1,7 +1,7 @@
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Canvas from "./pages/Canvas";
-import Impact from "./pages/Impact";
+import Engagements from "./pages/Engagements";
 import Gallery from "./pages/Gallery";
 import { StrategoChat } from "./components/StrategoChat";
 import { LayoutGrid, Compass, BarChart3, FolderOpen } from "lucide-react";
@@ -51,8 +51,8 @@ export default function App() {
             <NavLink to="/canvas" icon={Compass}>
               Canvas
             </NavLink>
-            <NavLink to="/impact" icon={BarChart3}>
-              Impact
+            <NavLink to="/engagements" icon={BarChart3}>
+              Engagements
             </NavLink>
             <NavLink to="/gallery" icon={FolderOpen}>
               Gallery
@@ -66,7 +66,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/canvas" element={<Canvas />} />
-          <Route path="/impact" element={<Impact />} />
+          <Route path="/engagements" element={<Engagements />} />
           <Route path="/gallery" element={<Gallery />} />
         </Routes>
       </main>
