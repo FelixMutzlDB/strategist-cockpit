@@ -81,6 +81,35 @@
 - **Test / acceptance.** CI green on a clean PR; `ruff check` and `npm run lint` both return 0 locally.
 - **Blast radius.** Config files + one workflow. Zero runtime impact.
 
+### T-108 Add security response headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
+- **Problem.** SDR questionnaire flags CSP as required. The app sets none of the standard defensive headers today, so we fail the "defense-in-depth" checks and implicitly allow anything the browser would allow by default.
+- **Plan.** Add a small FastAPI middleware that stamps these on every response:
+  - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' <KA endpoint host> <dashboard host>; frame-src <dashboard host> <genie host>; object-src 'none'; base-uri 'self'`
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: SAMEORIGIN`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+  The dashboard/Genie hosts become configurable via env since T-201/T-202 will embed them.
+- **Test / acceptance.** New `test_security_headers.py` asserts each header is present and non-empty on `/api/health`. Manual browser devtools check: no CSP violations in console on every page. Running the app in incognito still renders (no third-party cookie dependency).
+- **Blast radius.** One middleware file. Reversible. Risk: overly strict CSP may break the dashboard iframe — tune the `frame-src` list together with T-201.
+
+### T-109 Tighten Pydantic input validation on engagement and project schemas
+- **Problem.** `EngagementBase`/`ProjectBase` accept any string, any length, for fields like `engagement_type`, `status`, `fy`, `asq_url`, `customer`. Bad client input reaches the DB unchecked.
+- **Plan.**
+  1. Convert `engagement_type`, `status`, `fy` to `Literal[...]` types matching the app's dropdown options. Normalize `fy` to `^FY\d{2}$` via a validator.
+  2. `asq_url`, `related_documents` (when URL-like): validate as `HttpUrl` (Pydantic).
+  3. Cap free-text fields with `max_length`: `customer` 255, `engagement_title` 500, `ae` 255, text fields (`actionable_outcome`, `next_steps`, `related_documents`) 4000.
+  4. Add `model_config = ConfigDict(str_strip_whitespace=True)` to trim incoming strings.
+  5. Mirror the caps in SQLAlchemy `String(n)` where they already differ.
+- **Test / acceptance.** New cases in `test_engagements.py`: POST with invalid `engagement_type` returns 422; POST with 2 KB `customer` returns 422; POST with `asq_url = "not a url"` returns 422; valid payloads still succeed.
+- **Blast radius.** `schemas.py`, `models.py` (column lengths), tests. Forward-compatible (tightening, not loosening).
+
+### T-110 (meta) CSRF risk note
+- **Problem.** Questionnaire asks for CSRF protection. With the app hosted by Databricks Apps behind their auth proxy and no cookie-based auth in our own code, the CSRF attack surface is effectively zero — but we still need to state the control and re-evaluate if we ever introduce session cookies.
+- **Plan.** Add a short section to `docs/architecture.md` under "Security": document that the app relies on the Databricks Apps auth proxy (no self-issued session cookies), therefore classic CSRF doesn't apply. If we ever add our own session tokens, require `SameSite=Strict` + a double-submit token.
+- **Test / acceptance.** Doc section present and linked from SDR. No code change.
+- **Blast radius.** Docs only.
+
 ### T-107 Normalize quarter strings
 - **Problem.** Source data has both `FY25-Q1` and `FY25Q1`. Filters and the Engagements bar chart split by `,` but don't normalize.
 - **Plan.** Normalize on read: strip dash between FY and Q. Apply in the seeder and in the Engagements page quarter chart.
@@ -119,6 +148,29 @@
 - **Blast radius.** Schema (additive), API, UI.
 
 ---
+
+### T-205 Switch Databricks calls to OBO (On-Behalf-Of the logged-in user)
+- **Problem.** Today the app uses the default SDK credential resolution, which resolves to the Databricks App's service principal. For logfood rollout we committed to OBO so each strategist sees only what they are authorised to see in Unity Catalog.
+- **Plan.**
+  1. Read the user's access token from the request — Databricks Apps forwards it as `X-Forwarded-Access-Token` (and the email as `X-Forwarded-Email`). Add a FastAPI dependency `current_user_token()` that returns it (and errors 401 if missing in prod, optional in dev).
+  2. In `chat.py`, construct `WorkspaceClient(host=settings.databricks_host, token=user_token)` per request instead of using the default client.
+  3. For SQL queries (added by T-201 dashboard embed and any Genie integration), use the same user token via the SQL connector.
+  4. Record the required OBO scopes in `app.yaml` per Apps docs: `sql`, `dashboards.genie`, `serving.serving-endpoints`, `catalog.tables:read`, `catalogs.schemas:read`. Document in SDR.
+  5. Local dev fallback: if the header is absent, fall back to `DATABRICKS_TOKEN` so `npm run dev` still works — but log a warning so it's never confused with prod.
+- **Test / acceptance.** New `test_obo.py`: with `X-Forwarded-Access-Token: fake-token` and the WorkspaceClient mocked, assert the mocked constructor received the token. With no header and `ENV=prod`, chat returns 401. Integration test (manual): in logfood, a user without read on a resource gets a proper denied error rather than a blanket 200.
+- **Blast radius.** Chat router + new auth dep + app.yaml scopes. No schema change. Must land before T-206.
+
+### T-206 Migrate canonical data to `main.field_strategist_cockpit` and onto Lakebase
+- **Problem.** Today the app's ORM talks to local SQLite and the UC tables live in `home_felix_mutzl.strategist_canvas.*`. For logfood deployment we want (a) app state on Lakebase Postgres, (b) UC data in the new `main.field_strategist_cockpit` schema that the strategist group has access to.
+- **Plan.**
+  1. Once the `main.field_strategist_cockpit` schema is created, write a one-time migration script (`scripts/migrate_uc_schema.py`) that copies the three tables/views from `home_felix_mutzl.strategist_canvas.*` under the new names.
+  2. Update `scripts/build_dashboard.py` datasets to point at the new schema.
+  3. Provision a Lakebase instance; set `DATABASE_URL` via `valueFrom` in `app.yaml`.
+  4. Run `python -m data.seed_database` against Lakebase once to bootstrap (guard with T-105 idempotency).
+  5. Add a `strategist_email` column to `engagement` and `project` and a FastAPI dependency that filters by the authenticated user (pairs with T-205).
+  6. Update `docs/architecture.md` and the SDR resource table.
+- **Test / acceptance.** With the Lakebase `DATABASE_URL`, `pytest` passes locally pointed at a throwaway Postgres in Docker (or a test Lakebase project). Two users in logfood see disjoint engagement lists. Dashboard still renders under new schema.
+- **Blast radius.** Non-trivial: schema, data, routers, tests. Ship behind a feature flag or via a versioned deploy.
 
 ## P3 — Future integrations
 
