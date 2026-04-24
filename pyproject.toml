@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28.0",
     "pandas>=2.2.0",
     "pytest>=8.0.0",
+    "ruff>=0.7.0",
 ]
 
 [build-system]
@@ -31,3 +32,21 @@ testpaths = ["tests"]
 markers = [
     "integration: tests requiring Databricks credentials",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv", "static", "src/ui/node_modules", "src/ui/dist"]
+
+[tool.ruff.lint]
+# Start lenient: error-level checks + simplifications. Tighten later.
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+    "E501",   # line length is covered by formatter, not blocker
+    "B008",   # FastAPI depends pattern uses Depends() in defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "E402"]  # tests can import after path manipulation
+"data/seed_database.py" = ["E402"]
+"scripts/*" = ["E402"]

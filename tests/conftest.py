@@ -1,10 +1,11 @@
 """Shared test fixtures for the Strategist Cockpit test suite."""
 
 import os
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite:///test_strategist.db"
 

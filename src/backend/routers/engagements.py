@@ -1,20 +1,19 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from src.backend.database import get_db
 from src.backend.models import Engagement
-from src.backend.schemas import EngagementOut, EngagementCreate, EngagementUpdate
+from src.backend.schemas import EngagementCreate, EngagementOut, EngagementUpdate
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])
 
 
 @router.get("/", response_model=list[EngagementOut])
 def list_engagements(
-    fy: Optional[str] = Query(None, description="Filter by fiscal year, e.g. FY26"),
-    engagement_type: Optional[str] = Query(None, description="Filter by type: Focus, One-off, Customer Event"),
-    status: Optional[str] = Query(None, description="Filter by status: Completed, Ongoing, etc."),
-    customer: Optional[str] = Query(None, description="Filter by customer name (partial match)"),
+    fy: str | None = Query(None, description="Filter by fiscal year, e.g. FY26"),
+    engagement_type: str | None = Query(None, description="Filter by type: Focus, One-off, Customer Event"),
+    status: str | None = Query(None, description="Filter by status: Completed, Ongoing, etc."),
+    customer: str | None = Query(None, description="Filter by customer name (partial match)"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Engagement)

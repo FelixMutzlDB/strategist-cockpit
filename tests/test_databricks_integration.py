@@ -6,6 +6,7 @@ Mark with: pytest -m integration
 """
 
 import os
+
 import pytest
 
 SKIP_REASON = "Databricks credentials not configured"
