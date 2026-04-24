@@ -1,3 +1,14 @@
+"""Canvas router — keyword-matched summaries for each activity slug.
+
+Canvas activity slugs are unique per position on the canvas. Some labels repeat
+across the Thought Leadership / Evangelism sections of the canvas (e.g. "Events"),
+so each position has its own slug (`events-customer`, `events-evangelism`, ...).
+Keyword maps for the duplicate positions intentionally point at the same keyword
+set for now; they can diverge later if the UX calls for position-specific views.
+"""
+
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -7,7 +18,13 @@ from src.backend.schemas import CanvasSummary, EngagementOut
 
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
 
-# Mapping of canvas activity labels to engagement keywords for filtering
+
+# Canonical keyword sets. Reference these from the dispatch map so duplicate
+# positions share the same list without duplication.
+_KW_EVENTS = ["event", "keynote", "panel", "conference", "community day", "learning day"]
+_KW_MARKET_SCOUTING = ["scouting", "research", "trends", "innovation"]
+_KW_COMMUNITY_SEEDING = ["community", "meetup", "event", "conference", "DAIS", "DAIWT"]
+
 CANVAS_ACTIVITY_KEYWORDS: dict[str, list[str]] = {
     "c-level-vision-setting": ["vision", "CIO", "CFO", "CTO", "CDTO", "exec", "board", "leadership"],
     "data-ai-strategy": ["strategy", "data & ai", "data platform", "roadmap", "program"],
@@ -19,14 +36,23 @@ CANVAS_ACTIVITY_KEYWORDS: dict[str, list[str]] = {
     "focused-account-planning": ["account planning", "focused account", "territory"],
     "customer-mobilization": ["mobilization", "adoption", "enablement", "fast track", "MVP"],
     "adoption-frameworks": ["adoption", "framework", "self-service", "delivery model"],
-    "community-seeding": ["community", "meetup", "event", "conference", "DAIS", "DAIWT"],
     "individual-coaching": ["coaching", "mentoring", "advising"],
-    "events": ["event", "keynote", "panel", "conference", "community day", "learning day"],
-    "market-scouting": ["scouting", "research", "trends", "innovation"],
     "strategist-role": ["role", "metrics", "organization"],
     "strategy-cop": ["CoP", "community of practice", "strategy community"],
     "reusable-strategy-assets": ["reusable", "asset", "template", "playbook", "framework"],
     "strategy-research": ["research", "PoV", "point of view", "whitepaper"],
+    # Duplicate positions on the canvas map to the same keyword set today.
+    "events-customer": _KW_EVENTS,
+    "events-evangelism": _KW_EVENTS,
+    "market-scouting-customer": _KW_MARKET_SCOUTING,
+    "market-scouting-evangelism": _KW_MARKET_SCOUTING,
+    "community-seeding-evangelism": _KW_COMMUNITY_SEEDING,
+    "community-seeding-thought-leadership": _KW_COMMUNITY_SEEDING,
+    # Back-compat: the un-suffixed slugs continue to work so deep links survive
+    # the ID refactor.
+    "events": _KW_EVENTS,
+    "market-scouting": _KW_MARKET_SCOUTING,
+    "community-seeding": _KW_COMMUNITY_SEEDING,
 }
 
 

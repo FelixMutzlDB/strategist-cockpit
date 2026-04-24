@@ -97,10 +97,10 @@ export function StrategistCanvas({ onBoxClick }: StrategistCanvasProps) {
                 <div className="grid grid-cols-3 gap-2">
                   <CanvasBox id="c-level-vision-setting" label="C-level vision setting" onClick={onBoxClick} />
                   <CanvasBox id="elevate-the-pitch" label="Elevate the pitch" onClick={onBoxClick} />
-                  <CanvasBox id="events" label="Events" onClick={onBoxClick} />
+                  <CanvasBox id="events-customer" label="Events" onClick={onBoxClick} />
                   <CanvasBox id="data-ai-strategy" label="Data & AI Strategy (design/review)" onClick={onBoxClick} />
                   <CanvasBox id="targeted-customer-engagements" label="Targeted customer engagements" onClick={onBoxClick} />
-                  <CanvasBox id="market-scouting" label="Market Scouting" onClick={onBoxClick} />
+                  <CanvasBox id="market-scouting-customer" label="Market Scouting" onClick={onBoxClick} />
                   <CanvasBox id="strategic-hunting" label="Strategic Hunting" onClick={onBoxClick} />
                   <CanvasBox id="measuring-success" label="Measuring Success" onClick={onBoxClick} />
                 </div>
@@ -110,9 +110,9 @@ export function StrategistCanvas({ onBoxClick }: StrategistCanvasProps) {
               <div className="w-40 rounded-md border bg-background/50 p-3 space-y-2">
                 <div className="text-xs font-semibold">Evangelism [10%]</div>
                 <div className="space-y-2">
-                  <CanvasBox id="events" label="Events" onClick={onBoxClick} />
-                  <CanvasBox id="market-scouting" label="Market Scouting" onClick={onBoxClick} />
-                  <CanvasBox id="community-seeding" label="Community Seeding" onClick={onBoxClick} />
+                  <CanvasBox id="events-evangelism" label="Events" onClick={onBoxClick} />
+                  <CanvasBox id="market-scouting-evangelism" label="Market Scouting" onClick={onBoxClick} />
+                  <CanvasBox id="community-seeding-evangelism" label="Community Seeding" onClick={onBoxClick} />
                 </div>
               </div>
             </div>
@@ -121,7 +121,7 @@ export function StrategistCanvas({ onBoxClick }: StrategistCanvasProps) {
             <div className="grid grid-cols-3 gap-2">
               <CanvasBox id="champion-building" label="Champion Building" onClick={onBoxClick} />
               <CanvasBox id="customer-mobilization" label="Customer Mobilization" onClick={onBoxClick} />
-              <CanvasBox id="community-seeding" label="Community Seeding" onClick={onBoxClick} />
+              <CanvasBox id="community-seeding-thought-leadership" label="Community Seeding" onClick={onBoxClick} />
               <CanvasBox id="focused-account-planning" label="Focused account planning" onClick={onBoxClick} />
             </div>
           </div>
