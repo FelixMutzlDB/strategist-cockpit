@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, func
+
 from src.backend.database import Base
 
 
@@ -19,6 +20,8 @@ class Engagement(Base):
     quarter = Column(String(100))
     related_documents = Column(Text)
     next_steps = Column(Text)
+    # Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
+    uco_ids = Column(String(500))
 
 
 class Project(Base):

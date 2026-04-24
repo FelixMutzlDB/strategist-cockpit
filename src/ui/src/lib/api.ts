@@ -28,6 +28,8 @@ export interface Engagement {
   quarter: string | null;
   related_documents: string | null;
   next_steps: string | null;
+  // Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
+  uco_ids: string | null;
 }
 
 export function listEngagements(params?: {

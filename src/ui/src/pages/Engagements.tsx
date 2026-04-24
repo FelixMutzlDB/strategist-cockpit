@@ -56,6 +56,7 @@ const EMPTY_FORM: Omit<Engagement, "id"> = {
   quarter: null,
   related_documents: null,
   next_steps: null,
+  uco_ids: null,
 };
 
 type SortDir = "asc" | "desc" | null;
@@ -263,6 +264,7 @@ export default function Engagements() {
       quarter: eng.quarter,
       related_documents: eng.related_documents,
       next_steps: eng.next_steps,
+      uco_ids: eng.uco_ids,
     });
     setShowForm(true);
   };
@@ -693,6 +695,7 @@ export default function Engagements() {
                   <p className="font-medium">--</p>
                 )}
               </div>
+              <div className="col-span-2"><span className="text-muted-foreground">UCO IDs</span><p className="font-medium">{viewingEng.uco_ids || "--"}</p></div>
               <div className="col-span-2"><span className="text-muted-foreground">Actionable Outcome</span><p className="font-medium whitespace-pre-wrap">{viewingEng.actionable_outcome || "--"}</p></div>
               <div className="col-span-2"><span className="text-muted-foreground">Next Steps</span><p className="font-medium whitespace-pre-wrap">{viewingEng.next_steps || "--"}</p></div>
               <div className="col-span-2"><span className="text-muted-foreground">Related Documents</span><p className="font-medium whitespace-pre-wrap">{viewingEng.related_documents || "--"}</p></div>
@@ -765,6 +768,10 @@ export default function Engagements() {
             <div className="space-y-2">
               <Label htmlFor="asq_url">ASQ URL</Label>
               <Input id="asq_url" value={form.asq_url || ""} onChange={(e) => updateField("asq_url", e.target.value)} placeholder="https://..." />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="uco_ids">UCO IDs</Label>
+              <Input id="uco_ids" value={form.uco_ids || ""} onChange={(e) => updateField("uco_ids", e.target.value)} placeholder="e.g. UCO-1234, UCO-5678" />
             </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="actionable_outcome">Actionable Outcome</Label>

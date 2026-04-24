@@ -1,4 +1,4 @@
-"""Tests for the engagements API (CRUD operations)."""
+"""Tests for the engagements API (CRUD + input validation)."""
 
 
 def test_list_engagements_empty(client):
@@ -22,13 +22,11 @@ def test_create_engagement(client):
     assert data["engagement_type"] == "One-off"
     assert data["id"] > 0
 
-    # Cleanup
     client.delete(f"/api/engagements/{data['id']}")
 
 
 def test_create_engagement_requires_customer(client):
-    payload = {"engagement_title": "Missing Customer"}
-    resp = client.post("/api/engagements/", json=payload)
+    resp = client.post("/api/engagements/", json={"engagement_title": "Missing Customer"})
     assert resp.status_code == 422
 
 
@@ -112,3 +110,76 @@ def test_filter_by_customer_partial(client):
     resp = client.get("/api/engagements/?customer=boerse")
     assert resp.status_code == 200
     assert any("Boerse" in e["customer"] for e in resp.json())
+
+
+# T-109: tightened validation --------------------------------------------------
+
+def test_reject_invalid_engagement_type(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={"customer": "Bad Type", "engagement_type": "NotAType"},
+    )
+    assert resp.status_code == 422
+
+
+def test_reject_invalid_status(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={"customer": "Bad Status", "status": "made up"},
+    )
+    assert resp.status_code == 422
+
+
+def test_reject_invalid_fy_format(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={"customer": "Bad FY", "fy": "2027"},
+    )
+    assert resp.status_code == 422
+
+
+def test_reject_non_url_asq_url(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={"customer": "Bad URL", "asq_url": "not a url"},
+    )
+    assert resp.status_code == 422
+
+
+def test_accept_valid_asq_url(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={
+            "customer": "Good URL Corp",
+            "asq_url": "https://salesforce.com/asq/ASQ-123",
+        },
+    )
+    assert resp.status_code == 201
+    client.delete(f"/api/engagements/{resp.json()['id']}")
+
+
+def test_reject_oversize_customer(client):
+    resp = client.post("/api/engagements/", json={"customer": "x" * 2000})
+    assert resp.status_code == 422
+
+
+def test_strips_whitespace_from_inputs(client):
+    resp = client.post("/api/engagements/", json={"customer": "  Trimmed Corp  "})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["customer"] == "Trimmed Corp"
+    client.delete(f"/api/engagements/{data['id']}")
+
+
+# T-204: UCO IDs field round-trips ---------------------------------------------
+
+def test_engagement_accepts_uco_ids(client):
+    resp = client.post(
+        "/api/engagements/",
+        json={"customer": "UCO Corp", "uco_ids": "UCO-1234, UCO-5678"},
+    )
+    assert resp.status_code == 201
+    eng_id = resp.json()["id"]
+    fetched = client.get(f"/api/engagements/{eng_id}").json()
+    assert fetched["uco_ids"] == "UCO-1234, UCO-5678"
+    client.delete(f"/api/engagements/{eng_id}")
