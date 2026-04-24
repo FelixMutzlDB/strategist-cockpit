@@ -15,6 +15,7 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 │              FastAPI Backend (uvicorn)                │
 │  routers: engagements, projects, canvas, chat        │
 │  SQLAlchemy ORM  │  Pydantic schemas                 │
+│  SecurityHeadersMiddleware (CSP, X-Frame-Options …)  │
 └───────┬──────────┬──────────────────┬───────────────┘
         │          │                  │
    ┌────▼───┐  ┌──▼──────────┐  ┌───▼──────────────┐
@@ -37,21 +38,22 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 - **Validation**: Pydantic 2.10+ / pydantic-settings
 - **Database**: SQLite (local dev), Lakebase PostgreSQL (production)
 - **Entry point**: `src/backend/main.py`
+- **Security middleware**: `src/backend/middleware.py` stamps CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy on every response.
 
 ### API Routers
 
 | Router | Prefix | Purpose |
 |--------|--------|---------|
-| `engagements` | `/api/engagements` | CRUD for engagement records |
+| `engagements` | `/api/engagements` | CRUD with query filtering (fy, engagement_type, status, customer) |
 | `projects` | `/api/projects` | CRUD for gallery project items |
 | `canvas` | `/api/canvas` | Keyword-matched canvas activity summaries |
-| `chat` | `/api/chat` | Stratego chatbot (KA proxy or fallback) |
+| `chat` | `/api/chat` | Stratego chatbot (KA proxy with offline fallback) |
 
 ### Database Models
 
-**Engagement**: customer, engagement_title, engagement_type (Focus/One-off/Customer Event), status, fy, quarter, ae, asq_id, asq_url, actionable_outcome, next_steps, related_documents, timeframe
+**Engagement**: customer, engagement_title, engagement_type (Focus/One-off/Customer Event/Tbc), status, fy, quarter, ae, asq_id, asq_url, uco_ids, actionable_outcome, next_steps, related_documents, timeframe.
 
-**Project**: name, description, url, thumbnail_url, category, created_at
+**Project**: name, description, url, thumbnail_url, category, created_at.
 
 ## Frontend
 
@@ -65,14 +67,14 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 | Page | Route | Description |
 |------|-------|-------------|
 | Home | `/` | Welcome from Stratego + navigation tiles |
-| Canvas | `/canvas` | Interactive strategist canvas with popover summaries |
-| Engagements | `/engagements` | KPIs, quarter chart, filterable/sortable table with CRUD, view/edit/delete actions |
+| Canvas | `/canvas` | Interactive strategist canvas with dialog summaries per activity |
+| Engagements | `/engagements` | KPIs, quarter chart, filter bar (global search + FY + type + status dropdowns), sortable table with per-column filters, CRUD with view/edit/delete actions. Absorbs what used to live under `/impact` and `/data-entry`. |
 | Gallery | `/gallery` | Project thumbnail tiles with add/delete |
 
 ### Key Components
 
-- `StrategistCanvas` -- Interactive canvas with clickable activity boxes, goal sidebar, and 5 archetype links (Organizer, Builder, Product, Industry, Advisor)
-- `StrategoChat` -- Floating chat widget backed by `/api/chat`
+- `StrategistCanvas` — Interactive canvas with clickable activity boxes, goal sidebar, and 5 archetype links (Organizer, Builder, Product, Industry, Advisor). Each clickable box has a unique activity slug even when the same label appears in multiple positions.
+- `StrategoChat` — Floating chat widget backed by `/api/chat`.
 
 ## Databricks Integration
 
@@ -80,26 +82,52 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 
 | Asset | Type | Description |
 |-------|------|-------------|
-| `home_felix_mutzl.strategist_canvas.engagement_details` | Delta Table | Strategist engagement data (from CSV) |
-| `home_felix_mutzl.strategist_canvas.v_engagements_unified` | View | Joins engagements + ASQ + accounts + revenue |
-| `home_felix_mutzl.strategist_canvas.engagements` | View | Pre-existing mapping of strategist to accounts |
+| `main.field_strategist_cockpit.engagement_details` | Delta Table | Canonical engagement records |
+| `main.field_strategist_cockpit.v_engagements_unified` | View | Joins engagements + ASQ + accounts + revenue |
+| `main.field_strategist_cockpit.engagements` | View | Strategist → account mapping |
 | `main.gtm_gold.rpt_c360_overview_unpivoted` | Table | Revenue/consumption metrics by account and period |
+
+> Historical note: these assets previously lived under `home_felix_mutzl.strategist_canvas.*`. The migration to `main.field_strategist_cockpit.*` is tracked as backlog item T-206.
 
 ### AI/BI Dashboard
 
-The "Strategist Impact Dashboard" visualizes engagement metrics with:
-- KPI counters (total engagements, focus accounts, unique customers)
-- Engagement timeline by quarter (bar chart)
-- Engagement type breakdown (pie chart)
-- Filterable detail table
+The "Strategist Impact Dashboard" is defined in `scripts/build_dashboard.py` (Lakeview REST). Five pages: Executive Summary, Focus Engagements, One-off Engagements, Impact Analysis, Global Filters. The in-app `/impact` embed is tracked as T-201.
 
 ### Genie Space
 
-"Strategist Cockpit Genie" provides natural language queries over the unified engagement view and revenue data.
+"Strategist Cockpit Genie" provides natural language queries over the unified engagement view and revenue data. In-app embed is tracked as T-202.
 
 ### Stratego Chat (Knowledge Assistant)
 
-When a serving endpoint is configured via `STRATEGO_ENDPOINT_NAME`, chat queries are proxied to a Databricks Knowledge Assistant. When unavailable, keyword-based fallback responses cover all major topics.
+When `STRATEGO_ENDPOINT_NAME` is configured, `/api/chat` proxies messages to a Databricks Knowledge Assistant via `databricks-sdk`. When the endpoint is not configured (local dev without creds), the router returns a single short offline message — no keyword ladder.
+
+## Security
+
+### Response headers
+
+`SecurityHeadersMiddleware` stamps these on every response:
+
+| Header | Value | Purpose |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' $CSP_CONNECT_SRC; frame-src 'none' \| $CSP_FRAME_SRC; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'` | Defense-in-depth against injection |
+| `X-Frame-Options` | `SAMEORIGIN` | Block off-origin iframing of the app |
+| `X-Content-Type-Options` | `nosniff` | Disable MIME sniffing |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Don't leak request paths cross-origin |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Revoke hardware capabilities the app doesn't need |
+
+Dashboard or Genie iframe hosts are injected via `CSP_FRAME_SRC` (space-separated). Additional outbound call hosts (e.g. the Stratego KA endpoint) go in `CSP_CONNECT_SRC`.
+
+### CORS
+
+There is no CORS middleware. In production the app is served same-origin by Databricks Apps. In local dev the Vite dev server at `:5173` proxies `/api/*` to the backend at `:8000`, so requests are also same-origin from the browser's perspective.
+
+### CSRF
+
+The app issues no session cookies of its own. Authentication is handled upstream by the Databricks Apps auth proxy, which injects `X-Forwarded-Access-Token` and `X-Forwarded-Email` on every request. Because we use no self-managed cookies and accept no cross-origin requests (see CORS above), the classic CSRF attack surface is effectively nil. If we ever introduce our own session cookies, we must require `SameSite=Strict` + a double-submit CSRF token.
+
+### Input validation
+
+Pydantic schemas apply `Literal` enums on `engagement_type`, `status`, and `fy`; `HttpUrl` validation on URL fields; `max_length` caps on free-text fields; and `str_strip_whitespace`. Invalid payloads return 422.
 
 ## Configuration
 
@@ -109,10 +137,13 @@ All settings are managed via environment variables (or `.env` file), loaded by `
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite:///strategist_cockpit.db` | Database connection string |
 | `DATABRICKS_HOST` | (empty) | Workspace URL |
-| `DATABRICKS_TOKEN` | (empty) | PAT for API calls |
 | `DATABRICKS_WAREHOUSE_ID` | `071969b1ec9a91ca` | SQL warehouse for queries |
 | `STRATEGO_ENDPOINT_NAME` | (empty) | Serving endpoint for Stratego KA |
 | `DATABRICKS_APP_PORT` | `8000` | Port for the FastAPI server |
+| `CSP_FRAME_SRC` | (empty) | Space-separated hosts allowed in `frame-src` (dashboard/Genie embeds) |
+| `CSP_CONNECT_SRC` | (empty) | Space-separated hosts allowed in `connect-src` (KA endpoint, etc.) |
+
+`DATABRICKS_TOKEN` is read automatically by the Databricks SDK when set; the app does not surface it as a Pydantic setting.
 
 ## Deployment
 

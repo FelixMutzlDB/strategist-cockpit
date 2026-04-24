@@ -179,19 +179,22 @@ Routes to Databricks Knowledge Assistant if `STRATEGO_ENDPOINT_NAME` is configur
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | id | integer | auto | Primary key |
-| customer | string | yes | Account/customer name |
-| engagement_title | string | no | Description of the engagement |
-| engagement_type | string | no | "Focus", "One-off", "Customer Event", "Tbc" |
-| status | string | no | "Completed", "Ongoing", "Abandoned", "Not started", "On hold" |
-| fy | string | no | Fiscal year, e.g. "FY26" |
-| quarter | string | no | Quarter(s), e.g. "FY26Q1, FY26Q2" |
-| ae | string | no | Account Executive name |
-| asq_id | string | no | Salesforce ASQ identifier |
-| asq_url | string | no | Link to ASQ in Salesforce |
-| timeframe | string | no | Human-readable timeframe |
-| actionable_outcome | string | no | Key outcomes/deliverables |
-| next_steps | string | no | Follow-up actions |
-| related_documents | string | no | Links to related materials |
+| customer | string (≤255) | yes | Account/customer name |
+| engagement_title | string (≤500) | no | Description of the engagement |
+| engagement_type | enum | no | `Focus` / `One-off` / `Customer Event` / `Tbc` |
+| status | enum | no | `Completed` / `Ongoing` / `Abandoned` / `Not started` / `On hold` |
+| fy | string (`^FY\d{2}$`) | no | Fiscal year, e.g. `FY26` |
+| quarter | string (≤100) | no | Quarter(s), e.g. `FY26Q1, FY26Q2` |
+| ae | string (≤255) | no | Account Executive name |
+| asq_id | string (≤100) | no | Salesforce ASQ identifier |
+| asq_url | http(s) URL (≤1000) | no | Link to ASQ in Salesforce |
+| uco_ids | string (≤500) | no | Comma-separated Salesforce UCO IDs, e.g. `UCO-1234, UCO-5678` |
+| timeframe | string (≤255) | no | Human-readable timeframe |
+| actionable_outcome | string (≤4000) | no | Key outcomes/deliverables |
+| next_steps | string (≤4000) | no | Follow-up actions |
+| related_documents | string (≤4000) | no | Links to related materials |
+
+Invalid payloads return `422` (e.g. wrong enum value, malformed URL, oversized string).
 
 ### Project
 

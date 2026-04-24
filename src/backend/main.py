@@ -1,13 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.backend.database import init_db
-from src.backend.routers import engagements, projects, canvas, chat
+from src.backend.middleware import SecurityHeadersMiddleware
+from src.backend.routers import canvas, chat, engagements, projects
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,13 +24,10 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(title="Strategist Cockpit", version="0.1.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Same-origin under Databricks Apps in prod, same-origin via the Vite proxy in
+# local dev — no CORS needed in either case. Security headers stamped on every
+# response (see src/backend/middleware.py).
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Include API routers
 app.include_router(engagements.router)
