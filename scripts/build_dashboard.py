@@ -14,10 +14,8 @@ Usage:
 
 import argparse
 import json
-import sys
 
 from databricks.sdk import WorkspaceClient
-
 
 # -- Constants ----------------------------------------------------------------
 DASHBOARD_ID = "01f0f51a424b1cc0bc6f5feba0c33948"
@@ -308,7 +306,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`total_accounts`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -321,9 +319,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Total Accounts",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "All accounts in portfolio"
               }
             }
@@ -349,7 +347,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`focus_accounts`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -362,9 +360,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Focus Accounts",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "Multi-quarter deep engagements"
               }
             }
@@ -390,7 +388,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`oneoff_engagements`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -403,9 +401,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "One-off Engagements",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "Targeted, topic-specific"
               }
             }
@@ -431,7 +429,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`territories_covered`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -444,9 +442,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Territories",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "Areas covered"
               }
             }
@@ -472,7 +470,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`ae_partners`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -485,9 +483,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "AE Partners",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "Account Executives supported"
               }
             }
@@ -513,7 +511,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "SUM(`total_engagements`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -526,9 +524,9 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Total Engagements",
-                "showDescription": true,
+                "showDescription": True,
                 "description": "All engagement records"
               }
             }
@@ -562,7 +560,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`eng_type`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -594,7 +592,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Engagements Over Time"
               }
             }
@@ -628,7 +626,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`eng_type`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -660,7 +658,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Engagement Format Mix"
               }
             }
@@ -694,7 +692,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`eng_type`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -726,7 +724,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Engagements by Territory"
               }
             }
@@ -760,7 +758,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`eng_type`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -801,7 +799,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Revenue by Territory ($)"
               }
             }
@@ -876,7 +874,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`total_dbu_dollars`"
                     }
                   ],
-                  "disaggregated": true
+                  "disaggregated": True
                 }
               }
             ],
@@ -914,7 +912,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Focus Account Details"
               }
             }
@@ -962,7 +960,7 @@ SERIALIZED_DASHBOARD: dict = {
                       }
                     ]
                   },
-                  "disaggregated": false,
+                  "disaggregated": False,
                   "orders": [
                     {
                       "direction": "ASC",
@@ -1004,14 +1002,14 @@ SERIALIZED_DASHBOARD: dict = {
                           "type": "exact",
                           "places": 0
                         },
-                        "hideGroupSeparator": false
+                        "hideGroupSeparator": False
                       }
                     }
                   ]
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Focus Account Revenue by Quarter ($)"
               }
             }
@@ -1045,7 +1043,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`account_name`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1085,7 +1083,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Focus Account Revenue Trend (Quarterly)"
               }
             }
@@ -1119,7 +1117,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`account_name`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1156,11 +1154,11 @@ SERIALIZED_DASHBOARD: dict = {
                   }
                 },
                 "label": {
-                  "show": true
+                  "show": True
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Focus Account QoQ Growth Rate"
               }
             }
@@ -1215,7 +1213,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT(`*`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1237,7 +1235,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "One-off Engagements by Format"
               }
             }
@@ -1271,7 +1269,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`engagement_format`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1303,7 +1301,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "One-off Engagements Over Time"
               }
             }
@@ -1357,7 +1355,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`total_dbu_dollars`"
                     }
                   ],
-                  "disaggregated": true
+                  "disaggregated": True
                 }
               }
             ],
@@ -1398,7 +1396,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "One-off Engagement Details"
               }
             }
@@ -1454,7 +1452,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`advisor_yoy_growth`"
                     }
                   ],
-                  "disaggregated": true
+                  "disaggregated": True
                 }
               }
             ],
@@ -1483,7 +1481,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "YoY Growth: Advisor Focus Portfolio vs. Central Region"
               }
             }
@@ -1517,7 +1515,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`engagement_type`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1558,7 +1556,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Revenue by Engagement Type (Annual)"
               }
             }
@@ -1592,7 +1590,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`account_name`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
@@ -1632,7 +1630,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "All Engaged Accounts \u2014 Quarterly Revenue Trajectory"
               }
             }
@@ -1674,7 +1672,7 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "`yoy_growth`"
                     }
                   ],
-                  "disaggregated": true
+                  "disaggregated": True
                 }
               }
             ],
@@ -1706,7 +1704,7 @@ SERIALIZED_DASHBOARD: dict = {
                 }
               },
               "frame": {
-                "showTitle": true,
+                "showTitle": True,
                 "title": "Account Year-over-Year Growth"
               }
             }
@@ -1743,14 +1741,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -1788,14 +1786,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -1833,14 +1831,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -1878,14 +1876,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -1923,14 +1921,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -1968,14 +1966,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {
@@ -2013,14 +2011,14 @@ SERIALIZED_DASHBOARD: dict = {
                       "expression": "COUNT_IF(`associative_filter_predicate_group`)"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": False
                 }
               }
             ],
             "spec": {
               "version": 2,
               "frame": {
-                "showTitle": true
+                "showTitle": True
               },
               "widgetType": "filter-single-select",
               "encodings": {

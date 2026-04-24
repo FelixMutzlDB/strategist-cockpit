@@ -33,7 +33,7 @@ Strategist Impact Dashboard — Redesigned
   - Normalize quarter naming (FY25-Q1 vs FY25Q1 inconsistency in source data)
   - Add the region benchmark comparison as a dual-axis or side-by-side chart
 
-  The build script is saved at strategist-cockpit/build_dashboard.py.
+  The build script is saved at strategist-cockpit/scripts/build_dashboard.py.
 
 
 A few highlights from the research that could inform future dashboard iterations:

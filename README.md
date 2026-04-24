@@ -77,7 +77,7 @@ The app is served by FastAPI: `/api/*` hits the backend, everything else falls t
 | `home_felix_mutzl.strategist_canvas.v_engagements_unified` | View | Engagements joined with ASQ + accounts + revenue |
 | `home_felix_mutzl.strategist_canvas.engagements` | View | Pre-existing strategist-to-account mapping |
 | `main.gtm_gold.rpt_c360_overview_unpivoted` | Table | Account revenue/consumption per period |
-| Strategist Impact Dashboard (Felix) | Lakeview | Built via `build_dashboard.py` — not yet embedded in the app (see backlog T-201) |
+| Strategist Impact Dashboard (Felix) | Lakeview | Built via `scripts/build_dashboard.py` — not yet embedded in the app (see backlog T-201) |
 | Strategist Cockpit Genie | Genie Space | Not yet embedded in the app |
 | Stratego Knowledge Assistant | Serving endpoint | Configured via `STRATEGO_ENDPOINT_NAME` |
 
