@@ -4,6 +4,27 @@
 >
 > Way of working (same as CLAUDE.md): **Investigate → Plan incl. test design → Implement → Thoroughly test → Iterate.** Focus on operational efficiency, security, and coding best practices.
 
+## Done (2026-04-24 sweep)
+
+Landed in commits on `main`:
+
+- **T-001** Split working tree into meaningful commits
+- **T-002** Confirmed `strategist_cockpit.db` is not tracked (no-op)
+- **T-003** Moved `build_dashboard.py` → `scripts/build_dashboard.py`; fixed unquoted `true`/`false` literals that would have failed Python parsing
+- **T-004** Un-tracked `tsconfig.tsbuildinfo`, added `*.tsbuildinfo` to `.gitignore`
+- **T-101** Removed `CORSMiddleware`; app is same-origin in both prod and dev
+- **T-102** Dropped unused `databricks_token` from `Settings`
+- **T-103** Rewrote `chat.py` as thin KA proxy + single offline response; simplified tests
+- **T-104** Unique activity IDs per canvas position; router accepts new + legacy slugs; parametrized tests
+- **T-105** `seed_database.py` is idempotent by default; `--force` for destructive reseed
+- **T-106** Added ruff + eslint + GitHub Actions CI (`.github/workflows/ci.yml`)
+- **T-107** `normalize_quarter` helper collapses `FY25-Q1` → `FY25Q1` at seed time
+- **T-108** `SecurityHeadersMiddleware` stamps CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy on every response; allow-lists via `CSP_FRAME_SRC` / `CSP_CONNECT_SRC`; full test coverage in `tests/test_security_headers.py`
+- **T-109** `Literal` enums for `engagement_type` / `status`, regex on `fy`, http(s) URL check on `asq_url`, `max_length` caps aligned with SQLAlchemy columns, `str_strip_whitespace`, 422 test cases
+- **T-110** CSRF posture documented in `docs/architecture.md` — no session cookies, relies on Databricks Apps auth proxy
+- **T-203** `docs/architecture.md` synced with current reality (no `/impact` ghost references, describes view/edit/delete/filter actions, points to `scripts/build_dashboard.py`); `docs/api-reference.md` reflects tightened validation and the new `uco_ids` field
+- **T-204** `uco_ids` field on engagements — model, schema, API, form field, list/view display, CRUD test
+
 ---
 
 ## P0 — Hygiene

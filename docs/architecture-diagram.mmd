@@ -1,0 +1,77 @@
+flowchart LR
+    %% ╔══════════════════════════════════════════════════════════════════╗
+    %% ║  Strategist Cockpit – Solution Architecture                      ║
+    %% ╚══════════════════════════════════════════════════════════════════╝
+
+    User(["Strategist<br/>(browser)"])
+
+    AuthProxy["Databricks Apps Auth Proxy<br/>─────────────────────────────<br/>X-Forwarded-Access-Token (OBO)<br/>X-Forwarded-Email<br/>injected on every request"]
+
+    %% ── App Container ────────────────────────────────────────────────
+    subgraph AppContainer["Databricks App  ·  adb-2548836972759138.18.azuredatabricks.net"]
+        direction TB
+
+        SPA["React SPA  (Vite / static/)<br/>─────────────────────────────────<br/>Pages: Home · Canvas · Engagements · Gallery<br/>Floating widget: Stratego chat"]
+
+        subgraph FAAPI["FastAPI  (uvicorn)"]
+            direction TB
+            Routes["Routers<br/>/api/engagements  ·  /api/projects<br/>/api/canvas/summary  ·  /api/chat  ·  /api/health"]
+            OBODep["OBO dependency<br/>reads X-Forwarded-Access-Token"]
+        end
+
+        SPA -- "fetch() — REST calls" --> FAAPI
+    end
+
+    %% ── Platform Services ────────────────────────────────────────────
+    subgraph DBX["Databricks Platform Services"]
+        direction TB
+
+        ModelSvc["Model Serving<br/>─────────────────<br/>Stratego Knowledge Assistant"]
+
+        Lakebase[("Lakebase Postgres<br/>─────────────────<br/>engagement · project tables<br/>strategist_email  tenant col")]
+
+        SQLwh[("SQL Warehouse<br/>071969b1ec9a91ca")]
+
+        subgraph UC["Unity Catalog  ·  main.field_strategist_cockpit"]
+            direction LR
+            UC_det["engagement_details<br/>(Delta table)"]
+            UC_unif["v_engagements_unified<br/>engagements ⋈ ASQ ⋈ accounts ⋈ revenue"]
+            UC_map["engagements<br/>strategist → accounts"]
+            UC_rev["gtm_gold.rpt_c360_overview_unpivoted<br/>revenue / consumption per period"]
+        end
+
+        Dashboard["Strategist Impact Dashboard<br/>(Lakeview / AI-BI)<br/>planned embed"]:::planned
+
+        Genie["Strategist Cockpit<br/>Genie Space<br/>planned embed"]:::planned
+    end
+
+    %% ── SFDC (out of scope) ──────────────────────────────────────────
+    SFDC["Salesforce  SFDC<br/>─────────────<br/>ASQs + account data<br/>(out of scope)"]:::outofscope
+
+    %% ── Main spine (declared first so layout engine anchors it) ──────
+    User -- "HTTPS" --> AuthProxy
+    AuthProxy -- "HTTPS + OBO headers" --> AppContainer
+
+    %% ── Backend integrations ─────────────────────────────────────────
+    Routes -- "HTTPS + OBO token" --> ModelSvc
+    FAAPI -- "SQLAlchemy<br/>Postgres wire protocol<br/>(secret via app.yaml valueFrom)" --> Lakebase
+    FAAPI -- "Databricks SQL connector<br/>+ OBO token" --> SQLwh
+    SQLwh -- "SQL over HTTP" --> UC
+
+    %% ── Planned (dashed) ─────────────────────────────────────────────
+    SPA -. "planned: iframe embed" .-> Dashboard
+    SPA -. "planned: deep-link / embed" .-> Genie
+
+    %% ── SFDC feed (out of scope, dashed) ────────────────────────────
+    SFDC -. "gtm_gold pipelines  (out of scope)" .-> UC
+
+    %% ── Styles ───────────────────────────────────────────────────────
+    classDef outofscope fill:#efefef,stroke:#c0c0c0,color:#999,stroke-dasharray:5 4
+    classDef planned fill:#37474f,stroke:#263238,color:#b0bec5
+    classDef proxy fill:#0d47a1,stroke:#082b6b,color:#fff
+    classDef user fill:#1b5e20,stroke:#0a3d0a,color:#fff
+
+    class User user
+    class AuthProxy proxy
+    class Dashboard,Genie planned
+    class SFDC outofscope
