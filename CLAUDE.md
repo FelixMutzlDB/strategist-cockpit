@@ -43,7 +43,7 @@ Throughout, prioritise (in this order):
 ```bash
 # Backend (SQLite by default)
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + dev tooling
 python -m data.seed_database
 uvicorn src.backend.main:app --reload --port 8000
 

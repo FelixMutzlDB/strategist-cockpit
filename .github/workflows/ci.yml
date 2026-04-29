@@ -18,8 +18,10 @@ jobs:
           python-version: "3.10"
           cache: "pip"
 
-      - name: Install deps
-        run: pip install -r requirements.txt
+      - name: Install runtime + dev deps (hash-verified)
+        # Backend tests need pytest/ruff (the [dev] extra). Production install
+        # uses requirements.txt only — runtime deps without pytest or ruff.
+        run: pip install --require-hashes -r requirements-dev.txt
 
       - name: Ruff lint
         run: ruff check src tests data scripts
