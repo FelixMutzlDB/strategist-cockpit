@@ -1,6 +1,7 @@
 """Shared test fixtures for the Strategist Cockpit test suite."""
 
 import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,9 +10,21 @@ from sqlalchemy.orm import sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite:///test_strategist.db"
 
-from src.backend.database import Base, get_db
-from src.backend.main import app
-from src.backend.models import Engagement, Project
+# Ensure a minimal static/ directory exists at the path main.py expects so the
+# SPA mount is registered when tests import the app. CI's frontend job builds
+# the real static/ in another step; the backend job and local pytest don't, so
+# we stub it. This is the only mechanism a test has to exercise the SPA mount
+# (e.g. tests/test_static_traversal.py).
+_STATIC_DIR = Path(__file__).parent.parent / "static"
+if not _STATIC_DIR.exists():
+    _STATIC_DIR.mkdir(parents=True)
+    (_STATIC_DIR / "index.html").write_text(
+        "<!DOCTYPE html><html><body>test SPA</body></html>"
+    )
+
+from src.backend.database import Base, get_db  # noqa: E402
+from src.backend.main import app  # noqa: E402
+from src.backend.models import Engagement, Project  # noqa: E402
 
 
 @pytest.fixture(scope="session")

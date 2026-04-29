@@ -89,6 +89,8 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 
 > Historical note: these assets previously lived under `home_felix_mutzl.strategist_canvas.*`. The migration to `main.field_strategist_cockpit.*` is tracked as backlog item T-206.
 
+**Sync direction (policy).** Lakebase is the canonical store for app-managed state (`engagement`, `project` rows produced by the FastAPI routers). The UC tables in `main.field_strategist_cockpit.*` are an analytic projection built **from** Lakebase by a scheduled DLT pipeline. The reverse direction — UC → Lakebase — is **not used and not permitted**: per Databricks platform policy, syncing customer-influenced UC data back into Lakebase isn't allowed.
+
 ### AI/BI Dashboard
 
 The "Strategist Impact Dashboard" is defined in `scripts/build_dashboard.py` (Lakeview REST). Five pages: Executive Summary, Focus Engagements, One-off Engagements, Impact Analysis, Global Filters. The in-app `/impact` embed is tracked as T-201.

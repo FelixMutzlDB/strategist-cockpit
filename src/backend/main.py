@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.backend.database import init_db
@@ -41,14 +40,10 @@ def health():
     return {"status": "ok", "app": "strategist-cockpit"}
 
 
-# Serve React static files (built frontend)
+# Serve the built React SPA. Mounted last so /api/* routes win first.
+# StaticFiles handles path canonicalization safely (resolves and verifies the
+# resolved path stays inside the directory) — closes F-TM-3 from SDR-4682.
+# html=True makes it fall back to index.html for client-routed paths.
 static_dir = Path(__file__).parent.parent.parent / "static"
 if static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        file_path = static_dir / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        return FileResponse(str(static_dir / "index.html"))
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="spa")
