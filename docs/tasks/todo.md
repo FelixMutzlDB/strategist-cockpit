@@ -4,6 +4,48 @@
 >
 > Way of working (same as CLAUDE.md): **Investigate → Plan incl. test design → Implement → Thoroughly test → Iterate.** Focus on operational efficiency, security, and coding best practices.
 
+## Done (2026-04-29 SDR-4682 closure sweep — Tracks A + C)
+
+Landed across multiple commits to close SDR-4682 high-leverage findings:
+
+- **T-209 / F-TM-3 (High)** Path traversal in SPA catch-all replaced with
+  `StaticFiles(directory=static_dir, html=True)`. Starlette canonicalises and
+  rejects paths that escape the directory. New `tests/test_static_traversal.py`
+  drops a sentinel file at the repo root and confirms `/../sentinel`,
+  `/..%2fsentinel`, etc. never leak it. `conftest.py` ensures a stub
+  `static/index.html` exists so tests exercise the mount.
+- **T-210 / F-TM-6 (Medium)** Split `pyproject.toml` into `dependencies`
+  (runtime) + `[project.optional-dependencies].dev` (pytest, ruff). Generated
+  hash-pinned `requirements.txt` (runtime) + `requirements-dev.txt` (runtime+dev)
+  via `uv pip compile --generate-hashes`. CI uses `pip install --require-hashes
+  -r requirements-dev.txt`. README, CLAUDE.md, docs/development.md updated.
+- **T-207 / F-TM-4 (High)** New `src/backend/auth.py` with
+  `current_user_email()` FastAPI dep (reads `X-Forwarded-Email`; dev fallback
+  to `dev@local`; 401 in prod when `STRICT_AUTH=1`) + `is_admin()` against
+  `ADMIN_EMAILS` env. New `src/backend/audit.py` with `record_event()` emitting
+  structured JSON to `strategist_cockpit.audit` logger. Wired into every
+  state-changing route — engagements POST/PUT/DELETE, projects POST/DELETE,
+  chat POST. Chat logs `prompt_length` only, never content. UC Delta sink
+  for these events lands with T-206. Tests cover auth fallback paths, admin
+  list overrides, audit JSON shape, and that `extra` can't overwrite canonical
+  fields.
+- **T-208 / F-TM-5 (Medium)** Added `created_by_email` column to `Project`
+  (indexed). POST stamps it from `current_user_email()`. DELETE returns **404**
+  (not 403, per reviewer guidance) when caller is neither creator nor admin.
+  Two-user mock test in `tests/test_projects.py` proves the gating.
+- **F-TM-7 (Low)** Added a "Sync direction (policy)" paragraph to
+  `docs/architecture.md` stating Lakebase → UC is the only permitted direction
+  for `main.field_strategist_cockpit.engagement_details`.
+
+**Not addressed in this sweep — depend on SDR approval / OBO / Lakebase:**
+
+- **F-TM-1 / T-206** Multi-tenancy column + per-row filter on engagements/projects
+  — can only land once schema migration completes (in flight in a separate session)
+  and OBO is wired (post-SDR approval).
+- **F-TM-2 / T-205** Chat path on OBO — `auth.current_user_email()` is in place,
+  but the WorkspaceClient(token=user_token) substitution in `chat.py` still
+  needs `X-Forwarded-Access-Token` plumbing. Will land alongside the OBO rollout.
+
 ## Done (2026-04-24 sweep)
 
 Landed in commits on `main`:
