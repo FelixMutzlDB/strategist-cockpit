@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from src.backend.audit import record_event
+from src.backend.auth import current_user_email
 from src.backend.config import settings
 from src.backend.schemas import ChatMessage, ChatResponse
 
@@ -53,12 +55,32 @@ def _query_stratego(message: str) -> str:
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(message: ChatMessage) -> ChatResponse:
+async def chat(
+    message: ChatMessage,
+    user_email: str = Depends(current_user_email),
+) -> ChatResponse:
+    prompt_length = len(message.message)
     try:
         text = _query_stratego(message.message)
     except Exception as exc:  # noqa: BLE001 — defence-in-depth; inner handler already catches
         logger.error("Chat error: %s", exc)
+        record_event(
+            user_email=user_email,
+            action="chat",
+            target_type="stratego_ka",
+            result="error",
+            extra={
+                "prompt_length": prompt_length,
+                "error_class": type(exc).__name__,
+            },
+        )
         raise HTTPException(
             status_code=500, detail="Failed to process chat message"
         ) from exc
+    record_event(
+        user_email=user_email,
+        action="chat",
+        target_type="stratego_ka",
+        extra={"prompt_length": prompt_length},
+    )
     return ChatResponse(response=text, source="stratego")

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from src.backend.audit import record_event
+from src.backend.auth import current_user_email
 from src.backend.database import get_db
 from src.backend.models import Engagement
 from src.backend.schemas import EngagementCreate, EngagementOut, EngagementUpdate
@@ -37,11 +39,21 @@ def get_engagement(engagement_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=EngagementOut, status_code=201)
-def create_engagement(engagement: EngagementCreate, db: Session = Depends(get_db)):
+def create_engagement(
+    engagement: EngagementCreate,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
+):
     db_engagement = Engagement(**engagement.model_dump())
     db.add(db_engagement)
     db.commit()
     db.refresh(db_engagement)
+    record_event(
+        user_email=user_email,
+        action="create",
+        target_type="engagement",
+        target_id=db_engagement.id,
+    )
     return db_engagement
 
 
@@ -50,6 +62,7 @@ def update_engagement(
     engagement_id: int,
     engagement: EngagementUpdate,
     db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
 ):
     db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
     if not db_engagement:
@@ -59,13 +72,29 @@ def update_engagement(
         setattr(db_engagement, key, value)
     db.commit()
     db.refresh(db_engagement)
+    record_event(
+        user_email=user_email,
+        action="update",
+        target_type="engagement",
+        target_id=engagement_id,
+    )
     return db_engagement
 
 
 @router.delete("/{engagement_id}", status_code=204)
-def delete_engagement(engagement_id: int, db: Session = Depends(get_db)):
+def delete_engagement(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
+):
     db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
     if not db_engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
     db.delete(db_engagement)
     db.commit()
+    record_event(
+        user_email=user_email,
+        action="delete",
+        target_type="engagement",
+        target_id=engagement_id,
+    )

@@ -34,3 +34,6 @@ class Project(Base):
     thumbnail_url = Column(String(1000))
     category = Column(String(100))
     created_at = Column(DateTime, server_default=func.now())
+    # Email of the user who created the project (from X-Forwarded-Email).
+    # DELETE is gated to creator-or-admin (T-208 / SDR F-TM-5).
+    created_by_email = Column(String(255), index=True)

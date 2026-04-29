@@ -103,6 +103,7 @@ class ProjectOut(ProjectBase):
     model_config = {"from_attributes": True, "str_strip_whitespace": True}
     id: int
     created_at: datetime | None = None
+    created_by_email: str | None = None
 
 
 # --- Chat Schemas ---
