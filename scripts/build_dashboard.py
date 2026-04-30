@@ -419,52 +419,297 @@ SERIALIZED_DASHBOARD: dict = {
       "displayName": "focus_impact_summary",
       "queryLines": [
         "WITH eng AS (\n",
-        "  SELECT\n",
-        "    src.account_id, src.customer, src.strategist_email,\n",
+        "  SELECT src.account_id, src.customer, src.strategist_email,\n",
         "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
         "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
-        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
-        "  WHERE src.account_id IS NOT NULL\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src WHERE src.account_id IS NOT NULL\n",
         "),\n",
         "focus_engagements AS (\n",
-        "  SELECT *, CAST('20' || SUBSTRING(fy_clean, 3, 2) AS INT) AS engagement_fy_int\n",
+        "  SELECT *, CAST('20'||SUBSTRING(fy_clean,3,2) AS INT) AS engagement_fy_int\n",
         "  FROM eng WHERE engagement_type = 'Focus' AND REGEXP_LIKE(fy_clean, '^FY[0-9]{2}$')\n",
+        "),\n",
+        "current_fy AS (\n",
+        "  SELECT CASE WHEN MONTH(current_date()) >= 2 THEN YEAR(current_date()) + 1 ELSE YEAR(current_date()) END AS fy_int\n",
         "),\n",
         "focus_offsets AS (\n",
         "  SELECT f.*, o.fy_offset, f.engagement_fy_int + o.fy_offset AS target_fy\n",
         "  FROM focus_engagements f CROSS JOIN (SELECT 0 AS fy_offset UNION ALL SELECT 1) o\n",
+        "  CROSS JOIN current_fy\n",
+        "  -- Closed-FY filter: drop rows whose target_fy is the current (in-progress) FY or later.\n",
+        "  -- Keeps offset 0 rows always (baseline) so growth from 0 still has an anchor.\n",
+        "  WHERE f.engagement_fy_int + o.fy_offset < current_fy.fy_int\n",
+        "     OR o.fy_offset = 0\n",
         "),\n",
         "account_fy_dbu AS (\n",
-        "  SELECT fo.strategist_email, fo.account_id, fo.engagement_fy_int, fo.fy_offset, fo.target_fy,\n",
+        "  SELECT fo.strategist_email, fo.account_id, fo.customer, fo.engagement_format, fo.engagement_fy_int, fo.fy_offset, fo.target_fy,\n",
         "    SUM(c.dbu_dollars) AS account_dbu\n",
-        "  FROM focus_offsets fo\n",
-        "  LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
-        "    ON c.account_id = fo.account_id AND c.date_grain = 'quarterly'\n",
-        "   AND c.fiscal_year = fo.target_fy AND c.bu1 = 'Central'\n",
-        "  GROUP BY 1,2,3,4,5\n",
+        "  FROM focus_offsets fo LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id=fo.account_id AND c.date_grain='quarterly' AND c.fiscal_year=fo.target_fy AND c.bu1='Central'\n",
+        "  GROUP BY 1,2,3,4,5,6,7\n",
         "),\n",
         "region_fy_dbu AS (\n",
-        "  SELECT c.fiscal_year AS target_fy, AVG(annual_dbu) AS region_avg_dbu\n",
-        "  FROM (\n",
-        "    SELECT account_id, fiscal_year, SUM(dbu_dollars) AS annual_dbu\n",
-        "    FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central'\n",
-        "    GROUP BY 1, 2\n",
-        "  ) c GROUP BY 1\n",
+        "  SELECT c.fiscal_year AS target_fy, AVG(annual_dbu) AS region_avg_dbu, percentile_approx(annual_dbu, 0.5) AS region_med_dbu\n",
+        "  FROM (SELECT account_id, fiscal_year, SUM(dbu_dollars) AS annual_dbu\n",
+        "        FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central' GROUP BY 1,2) c\n",
+        "  GROUP BY 1\n",
         "),\n",
         "joined AS (\n",
-        "  SELECT ad.strategist_email, ad.account_id, ad.engagement_fy_int, ad.fy_offset,\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.customer, ad.engagement_format, ad.engagement_fy_int, ad.fy_offset,\n",
+        "    ad.account_dbu, rd.region_avg_dbu, rd.region_med_dbu,\n",
         "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
         "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset)) AS account_growth,\n",
         "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
-        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_avg,\n",
+        "    try_divide(rd.region_med_dbu - FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_med\n",
         "  FROM account_fy_dbu ad LEFT JOIN region_fy_dbu rd ON rd.target_fy = ad.target_fy\n",
         ")\n",
         "SELECT CAST(fy_offset AS STRING) AS fy_offset, 'Advisor portfolio (avg)' AS series, AVG(account_growth) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
         "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY fy_offset\n",
         "UNION ALL\n",
-        "SELECT CAST(fy_offset AS STRING) AS fy_offset, 'Central region (avg)' AS series, AVG(region_growth) AS avg_growth, NULL AS n_accounts\n",
-        "FROM joined WHERE region_growth IS NOT NULL GROUP BY fy_offset\n",
+        "SELECT CAST(fy_offset AS STRING), 'Central region (avg)', AVG(region_growth_avg), NULL FROM joined WHERE region_growth_avg IS NOT NULL GROUP BY fy_offset\n",
         "ORDER BY fy_offset, series\n"
+      ]
+    },
+    {
+      "name": "ds_oneoff_impact_summary_median",
+      "displayName": "oneoff_impact_summary_median",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "eng_dated AS (\n",
+        "  SELECT *, CASE WHEN REGEXP_LIKE(quarter, '^FY[0-9]{2}Q[1-4]$') THEN\n",
+        "    make_date(CAST('20'||SUBSTRING(quarter,3,2) AS INT)-1,\n",
+        "      CASE SUBSTRING(quarter,6,1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1)\n",
+        "    END AS engagement_quarter_start\n",
+        "  FROM eng WHERE engagement_type = 'One-off' AND quarter IS NOT NULL\n",
+        "),\n",
+        "eng_offsets AS (\n",
+        "  SELECT e.*, o.qtr_offset, add_months(e.engagement_quarter_start, 3*o.qtr_offset) AS target_quarter\n",
+        "  FROM eng_dated e CROSS JOIN (SELECT 0 AS qtr_offset UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) o\n",
+        "  WHERE e.engagement_quarter_start IS NOT NULL\n",
+        "),\n",
+        "account_dbu AS (\n",
+        "  SELECT eo.strategist_email, eo.account_id, eo.customer, eo.engagement_format, eo.engagement_quarter_start, eo.qtr_offset, eo.target_quarter,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM eng_offsets eo LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id=eo.account_id AND c.date_grain='quarterly' AND c.usage_date_fiscal_quarter_start=eo.target_quarter AND c.bu1='Central'\n",
+        "  GROUP BY 1,2,3,4,5,6,7\n",
+        "),\n",
+        "region_dbu AS (\n",
+        "  SELECT c.usage_date_fiscal_quarter_start AS target_quarter, AVG(quarterly_dbu) AS region_avg_dbu, percentile_approx(quarterly_dbu, 0.5) AS region_med_dbu\n",
+        "  FROM (SELECT account_id, usage_date_fiscal_quarter_start, SUM(dbu_dollars) AS quarterly_dbu\n",
+        "        FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central' GROUP BY 1,2) c\n",
+        "  GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.customer, ad.engagement_format, ad.engagement_quarter_start, ad.qtr_offset,\n",
+        "    ad.account_dbu, rd.region_avg_dbu, rd.region_med_dbu,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth_avg,\n",
+        "    try_divide(rd.region_med_dbu - FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth_med\n",
+        "  FROM account_dbu ad LEFT JOIN region_dbu rd ON rd.target_quarter = ad.target_quarter\n",
+        ")\n",
+        "SELECT CAST(qtr_offset AS STRING) AS qtr_offset, 'Advisor portfolio (median)' AS series, percentile_approx(account_growth, 0.5) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
+        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY qtr_offset\n",
+        "UNION ALL\n",
+        "SELECT CAST(qtr_offset AS STRING), 'Central region (median)', percentile_approx(region_growth_med, 0.5), NULL FROM joined WHERE region_growth_med IS NOT NULL GROUP BY qtr_offset\n",
+        "ORDER BY qtr_offset, series\n"
+      ]
+    },
+    {
+      "name": "ds_focus_impact_summary_median",
+      "displayName": "focus_impact_summary_median",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "focus_engagements AS (\n",
+        "  SELECT *, CAST('20'||SUBSTRING(fy_clean,3,2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng WHERE engagement_type = 'Focus' AND REGEXP_LIKE(fy_clean, '^FY[0-9]{2}$')\n",
+        "),\n",
+        "current_fy AS (\n",
+        "  SELECT CASE WHEN MONTH(current_date()) >= 2 THEN YEAR(current_date()) + 1 ELSE YEAR(current_date()) END AS fy_int\n",
+        "),\n",
+        "focus_offsets AS (\n",
+        "  SELECT f.*, o.fy_offset, f.engagement_fy_int + o.fy_offset AS target_fy\n",
+        "  FROM focus_engagements f CROSS JOIN (SELECT 0 AS fy_offset UNION ALL SELECT 1) o\n",
+        "  CROSS JOIN current_fy\n",
+        "  -- Closed-FY filter: drop rows whose target_fy is the current (in-progress) FY or later.\n",
+        "  -- Keeps offset 0 rows always (baseline) so growth from 0 still has an anchor.\n",
+        "  WHERE f.engagement_fy_int + o.fy_offset < current_fy.fy_int\n",
+        "     OR o.fy_offset = 0\n",
+        "),\n",
+        "account_fy_dbu AS (\n",
+        "  SELECT fo.strategist_email, fo.account_id, fo.customer, fo.engagement_format, fo.engagement_fy_int, fo.fy_offset, fo.target_fy,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM focus_offsets fo LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id=fo.account_id AND c.date_grain='quarterly' AND c.fiscal_year=fo.target_fy AND c.bu1='Central'\n",
+        "  GROUP BY 1,2,3,4,5,6,7\n",
+        "),\n",
+        "region_fy_dbu AS (\n",
+        "  SELECT c.fiscal_year AS target_fy, AVG(annual_dbu) AS region_avg_dbu, percentile_approx(annual_dbu, 0.5) AS region_med_dbu\n",
+        "  FROM (SELECT account_id, fiscal_year, SUM(dbu_dollars) AS annual_dbu\n",
+        "        FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central' GROUP BY 1,2) c\n",
+        "  GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.customer, ad.engagement_format, ad.engagement_fy_int, ad.fy_offset,\n",
+        "    ad.account_dbu, rd.region_avg_dbu, rd.region_med_dbu,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_avg,\n",
+        "    try_divide(rd.region_med_dbu - FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_med\n",
+        "  FROM account_fy_dbu ad LEFT JOIN region_fy_dbu rd ON rd.target_fy = ad.target_fy\n",
+        ")\n",
+        "SELECT CAST(fy_offset AS STRING) AS fy_offset, 'Advisor portfolio (median)' AS series, percentile_approx(account_growth, 0.5) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
+        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY fy_offset\n",
+        "UNION ALL\n",
+        "SELECT CAST(fy_offset AS STRING), 'Central region (median)', percentile_approx(region_growth_med, 0.5), NULL FROM joined WHERE region_growth_med IS NOT NULL GROUP BY fy_offset\n",
+        "ORDER BY fy_offset, series\n"
+      ]
+    },
+    {
+      "name": "ds_oneoff_impact_detail",
+      "displayName": "oneoff_impact_detail",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "eng_dated AS (\n",
+        "  SELECT *, CASE WHEN REGEXP_LIKE(quarter, '^FY[0-9]{2}Q[1-4]$') THEN\n",
+        "    make_date(CAST('20'||SUBSTRING(quarter,3,2) AS INT)-1,\n",
+        "      CASE SUBSTRING(quarter,6,1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1)\n",
+        "    END AS engagement_quarter_start\n",
+        "  FROM eng WHERE engagement_type = 'One-off' AND quarter IS NOT NULL\n",
+        "),\n",
+        "eng_offsets AS (\n",
+        "  SELECT e.*, o.qtr_offset, add_months(e.engagement_quarter_start, 3*o.qtr_offset) AS target_quarter\n",
+        "  FROM eng_dated e CROSS JOIN (SELECT 0 AS qtr_offset UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) o\n",
+        "  WHERE e.engagement_quarter_start IS NOT NULL\n",
+        "),\n",
+        "account_dbu AS (\n",
+        "  SELECT eo.strategist_email, eo.account_id, eo.customer, eo.engagement_format, eo.engagement_quarter_start, eo.qtr_offset, eo.target_quarter,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM eng_offsets eo LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id=eo.account_id AND c.date_grain='quarterly' AND c.usage_date_fiscal_quarter_start=eo.target_quarter AND c.bu1='Central'\n",
+        "  GROUP BY 1,2,3,4,5,6,7\n",
+        "),\n",
+        "region_dbu AS (\n",
+        "  SELECT c.usage_date_fiscal_quarter_start AS target_quarter, AVG(quarterly_dbu) AS region_avg_dbu, percentile_approx(quarterly_dbu, 0.5) AS region_med_dbu\n",
+        "  FROM (SELECT account_id, usage_date_fiscal_quarter_start, SUM(dbu_dollars) AS quarterly_dbu\n",
+        "        FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central' GROUP BY 1,2) c\n",
+        "  GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.customer, ad.engagement_format, ad.engagement_quarter_start, ad.qtr_offset,\n",
+        "    ad.account_dbu, rd.region_avg_dbu, rd.region_med_dbu,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth_avg,\n",
+        "    try_divide(rd.region_med_dbu - FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth_med\n",
+        "  FROM account_dbu ad LEFT JOIN region_dbu rd ON rd.target_quarter = ad.target_quarter\n",
+        ")\n",
+        "SELECT\n",
+        "  customer,\n",
+        "  engagement_format,\n",
+        "  engagement_quarter_start,\n",
+        "  qtr_offset,\n",
+        "  ROUND(account_dbu, 0) AS account_dbu,\n",
+        "  ROUND(region_avg_dbu, 0) AS region_avg_dbu,\n",
+        "  account_growth,\n",
+        "  region_growth_avg,\n",
+        "  account_growth - region_growth_avg AS delta_vs_region\n",
+        "FROM joined\n",
+        "WHERE strategist_email IS NOT NULL AND qtr_offset > 0\n",
+        "ORDER BY customer, engagement_quarter_start, qtr_offset\n"
+      ]
+    },
+    {
+      "name": "ds_focus_impact_detail",
+      "displayName": "focus_impact_detail",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "focus_engagements AS (\n",
+        "  SELECT *, CAST('20'||SUBSTRING(fy_clean,3,2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng WHERE engagement_type = 'Focus' AND REGEXP_LIKE(fy_clean, '^FY[0-9]{2}$')\n",
+        "),\n",
+        "current_fy AS (\n",
+        "  SELECT CASE WHEN MONTH(current_date()) >= 2 THEN YEAR(current_date()) + 1 ELSE YEAR(current_date()) END AS fy_int\n",
+        "),\n",
+        "focus_offsets AS (\n",
+        "  SELECT f.*, o.fy_offset, f.engagement_fy_int + o.fy_offset AS target_fy\n",
+        "  FROM focus_engagements f CROSS JOIN (SELECT 0 AS fy_offset UNION ALL SELECT 1) o\n",
+        "  CROSS JOIN current_fy\n",
+        "  -- Closed-FY filter: drop rows whose target_fy is the current (in-progress) FY or later.\n",
+        "  -- Keeps offset 0 rows always (baseline) so growth from 0 still has an anchor.\n",
+        "  WHERE f.engagement_fy_int + o.fy_offset < current_fy.fy_int\n",
+        "     OR o.fy_offset = 0\n",
+        "),\n",
+        "account_fy_dbu AS (\n",
+        "  SELECT fo.strategist_email, fo.account_id, fo.customer, fo.engagement_format, fo.engagement_fy_int, fo.fy_offset, fo.target_fy,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM focus_offsets fo LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id=fo.account_id AND c.date_grain='quarterly' AND c.fiscal_year=fo.target_fy AND c.bu1='Central'\n",
+        "  GROUP BY 1,2,3,4,5,6,7\n",
+        "),\n",
+        "region_fy_dbu AS (\n",
+        "  SELECT c.fiscal_year AS target_fy, AVG(annual_dbu) AS region_avg_dbu, percentile_approx(annual_dbu, 0.5) AS region_med_dbu\n",
+        "  FROM (SELECT account_id, fiscal_year, SUM(dbu_dollars) AS annual_dbu\n",
+        "        FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central' GROUP BY 1,2) c\n",
+        "  GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.customer, ad.engagement_format, ad.engagement_fy_int, ad.fy_offset,\n",
+        "    ad.account_dbu, rd.region_avg_dbu, rd.region_med_dbu,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_avg,\n",
+        "    try_divide(rd.region_med_dbu - FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_med_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth_med\n",
+        "  FROM account_fy_dbu ad LEFT JOIN region_fy_dbu rd ON rd.target_fy = ad.target_fy\n",
+        ")\n",
+        "SELECT\n",
+        "  customer,\n",
+        "  engagement_format,\n",
+        "  engagement_fy_int,\n",
+        "  fy_offset,\n",
+        "  ROUND(account_dbu, 0) AS account_dbu,\n",
+        "  ROUND(region_avg_dbu, 0) AS region_avg_dbu,\n",
+        "  account_growth,\n",
+        "  region_growth_avg,\n",
+        "  account_growth - region_growth_avg AS delta_vs_region\n",
+        "FROM joined\n",
+        "WHERE strategist_email IS NOT NULL AND fy_offset > 0\n",
+        "ORDER BY customer, engagement_fy_int, fy_offset\n"
       ]
     }
   ],
@@ -2080,6 +2325,444 @@ SERIALIZED_DASHBOARD: dict = {
             "y": 28,
             "width": 6,
             "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_oneoff_impact_median",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_oneoff_impact_summary_median",
+                  "fields": [
+                    {
+                      "name": "qtr_offset",
+                      "expression": "`qtr_offset`"
+                    },
+                    {
+                      "name": "avg(avg_growth)",
+                      "expression": "AVG(`avg_growth`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "qtr_offset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "qtr offset"
+                },
+                "y": {
+                  "fieldName": "avg(avg_growth)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Growth vs baseline"
+                },
+                "color": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "One-off engagements — MEDIAN view (less skewed by outliers)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 34,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_focus_impact_median",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_impact_summary_median",
+                  "fields": [
+                    {
+                      "name": "fy_offset",
+                      "expression": "`fy_offset`"
+                    },
+                    {
+                      "name": "avg(avg_growth)",
+                      "expression": "AVG(`avg_growth`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "fy_offset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "fy offset"
+                },
+                "y": {
+                  "fieldName": "avg(avg_growth)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Growth vs baseline"
+                },
+                "color": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Focus engagements — MEDIAN view (closed FYs only)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 40,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "header_impact_detail",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Per-engagement detail\n",
+                "\n",
+                "Each engagement's account growth at each post-engagement period, with the Central-region average growth over the same window and the delta. Positive delta = the engaged account outpaced the regional benchmark.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 46,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "tbl_oneoff_impact",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_oneoff_impact_detail",
+                  "fields": [
+                    {
+                      "name": "customer",
+                      "expression": "`customer`"
+                    },
+                    {
+                      "name": "engagement_format",
+                      "expression": "`engagement_format`"
+                    },
+                    {
+                      "name": "engagement_quarter_start",
+                      "expression": "`engagement_quarter_start`"
+                    },
+                    {
+                      "name": "qtr_offset_or_fy_offset",
+                      "expression": "`qtr_offset`"
+                    },
+                    {
+                      "name": "account_dbu",
+                      "expression": "`account_dbu`"
+                    },
+                    {
+                      "name": "account_growth",
+                      "expression": "`account_growth`"
+                    },
+                    {
+                      "name": "region_growth_avg",
+                      "expression": "`region_growth_avg`"
+                    },
+                    {
+                      "name": "delta_vs_region",
+                      "expression": "`delta_vs_region`"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "customer",
+                    "displayName": "Customer",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "engagement_format",
+                    "displayName": "Format",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "engagement_quarter_start",
+                    "displayName": "Eng. quarter",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "qtr_offset_or_fy_offset",
+                    "displayName": "Offset",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "account_dbu",
+                    "displayName": "Account $DBU",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "USD",
+                      "abbreviation": "compact-long",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "account_growth",
+                    "displayName": "Account growth",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "region_growth_avg",
+                    "displayName": "Region (avg) growth",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "delta_vs_region",
+                    "displayName": "Delta vs region",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "One-off engagements — per-engagement growth vs Central region"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 48,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "tbl_focus_impact",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_impact_detail",
+                  "fields": [
+                    {
+                      "name": "customer",
+                      "expression": "`customer`"
+                    },
+                    {
+                      "name": "engagement_format",
+                      "expression": "`engagement_format`"
+                    },
+                    {
+                      "name": "engagement_fy_int",
+                      "expression": "`engagement_fy_int`"
+                    },
+                    {
+                      "name": "qtr_offset_or_fy_offset",
+                      "expression": "`fy_offset`"
+                    },
+                    {
+                      "name": "account_dbu",
+                      "expression": "`account_dbu`"
+                    },
+                    {
+                      "name": "account_growth",
+                      "expression": "`account_growth`"
+                    },
+                    {
+                      "name": "region_growth_avg",
+                      "expression": "`region_growth_avg`"
+                    },
+                    {
+                      "name": "delta_vs_region",
+                      "expression": "`delta_vs_region`"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "customer",
+                    "displayName": "Customer",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "engagement_format",
+                    "displayName": "Format",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "engagement_fy_int",
+                    "displayName": "Eng. FY",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "qtr_offset_or_fy_offset",
+                    "displayName": "Offset",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "account_dbu",
+                    "displayName": "Account $DBU",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "USD",
+                      "abbreviation": "compact-long",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "account_growth",
+                    "displayName": "Account growth",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "region_growth_avg",
+                    "displayName": "Region (avg) growth",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  },
+                  {
+                    "fieldName": "delta_vs_region",
+                    "displayName": "Delta vs region",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 0
+                      }
+                    },
+                    "type": "float"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Focus engagements — per-engagement growth vs Central region (closed FYs only)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 56,
+            "width": 6,
+            "height": 8
           }
         }
       ],
