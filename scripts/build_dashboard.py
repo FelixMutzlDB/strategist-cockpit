@@ -50,7 +50,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  e.territory_region,\n",
         "  e.territory_area,\n",
         "  e.territory_segment\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n"
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n"
       ]
     },
     {
@@ -66,7 +74,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  COUNT(*) AS engagement_count,\n",
         "  COUNT(DISTINCT account_id) AS account_count,\n",
         "  ROUND(SUM(COALESCE(total_dbu_dollars, 0))) AS total_dbu_dollars\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ")\n",
         "GROUP BY fy, eng_type\n",
         "ORDER BY fy, eng_type\n"
       ]
@@ -87,7 +103,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  ROUND(SUM(c.dbu_dollars_ai)) AS dbu_dollars_ai,\n",
         "  ROUND(SUM(c.dbu_dollars_sql)) AS dbu_dollars_sql,\n",
         "  ROUND(SUM(c.dbu_dollars_uc)) AS dbu_dollars_uc\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n",
         "LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
         "  ON e.account_id = c.account_id\n",
         "WHERE e.engagement_type = 'Focus'\n",
@@ -111,7 +135,15 @@ SERIALIZED_DASHBOARD: dict = {
         "      (SUM(dbu_dollars) - LAG(SUM(dbu_dollars)) OVER (ORDER BY fiscal_year)),\n",
         "      LAG(SUM(dbu_dollars)) OVER (ORDER BY fiscal_year)\n",
         "    ) AS advisor_yoy_growth\n",
-        "  FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "  FROM (\n",
+        "    SELECT\n",
+        "      src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "      NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "      NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "      NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "      COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "    FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        "  ) e\n",
         "  LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
         "  WHERE e.engagement_type = 'Focus'\n",
         "    AND c.date_grain = 'quarterly' AND c.fiscal_year BETWEEN 2024 AND 2027 AND c.bu1 = 'Central'\n",
@@ -145,7 +177,15 @@ SERIALIZED_DASHBOARD: dict = {
         "    (SUM(c.dbu_dollars) - LAG(SUM(c.dbu_dollars)) OVER (PARTITION BY e.customer ORDER BY c.fiscal_year)),\n",
         "    LAG(SUM(c.dbu_dollars)) OVER (PARTITION BY e.customer ORDER BY c.fiscal_year)\n",
         "  ) AS yoy_growth\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n",
         "LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
         "WHERE c.date_grain = 'quarterly' AND c.fiscal_year BETWEEN 2024 AND 2027 AND c.bu1 = 'Central'\n",
         "GROUP BY e.customer, e.engagement_type, e.engagement_format, c.fiscal_year\n",
@@ -167,7 +207,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  e.territory_area,\n",
         "  COALESCE(e.total_dbu_dollars, 0) AS total_dbu_dollars,\n",
         "  e.next_steps\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n",
         "WHERE e.engagement_type = 'One-off'\n",
         "ORDER BY e.ASQ_Start_Date DESC\n"
       ]
@@ -185,7 +233,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  SUM(CASE WHEN e.engagement_type = 'One-off' THEN 1 ELSE 0 END) AS oneoff_engagements,\n",
         "  COUNT(DISTINCT e.territory_area) AS territories_covered,\n",
         "  COUNT(DISTINCT e.ae) AS ae_partners\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n"
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n"
       ]
     },
     {
@@ -204,7 +260,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  END AS eng_format,\n",
         "  COUNT(*) AS cnt,\n",
         "  ROUND(SUM(COALESCE(total_dbu_dollars, 0))) AS total_dbu_dollars\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ")\n",
         "GROUP BY eng_type, eng_format\n",
         "ORDER BY eng_type, cnt DESC\n"
       ]
@@ -222,7 +286,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  COUNT(*) AS engagement_count,\n",
         "  COUNT(DISTINCT account_id) AS account_count,\n",
         "  ROUND(SUM(COALESCE(total_dbu_dollars, 0))) AS total_dbu_dollars\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ")\n",
         "WHERE territory_area IS NOT NULL\n",
         "GROUP BY territory_area, eng_type\n",
         "ORDER BY total_dbu_dollars DESC\n"
@@ -241,7 +313,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  e.territory_area,\n",
         "  COALESCE(e.total_dbu_dollars, 0) AS total_dbu_dollars,\n",
         "  e.next_steps\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n",
         "WHERE e.engagement_type = 'Focus'\n",
         "ORDER BY e.ASQ_Start_Date DESC\n"
       ]
@@ -257,7 +337,15 @@ SERIALIZED_DASHBOARD: dict = {
         "  c.fiscal_year,\n",
         "  c.usage_date_fiscal_quarter_start,\n",
         "  ROUND(SUM(c.dbu_dollars)) AS dbu_dollars\n",
-        "FROM home_felix_mutzl.strategist_canvas.v_engagements_unified e\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        ") e\n",
         "LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
         "  ON e.account_id = c.account_id\n",
         "WHERE c.date_grain = 'quarterly'\n",
@@ -2037,6 +2125,98 @@ SERIALIZED_DASHBOARD: dict = {
             "width": 1,
             "height": 2
           }
+        },
+        {
+          "widget": {
+            "name": "filter_engagement_format",
+            "queries": [
+              {
+                "name": "dashboards/01f0f51a424b1cc0bc6f5feba0c33948/datasets/01f1211b00e31b138b40bc8e12ff8573_engagement_format",
+                "query": {
+                  "datasetName": "ds_portfolio",
+                  "fields": [
+                    {
+                      "name": "engagement_format",
+                      "expression": "`engagement_format`"
+                    },
+                    {
+                      "name": "engagement_format_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": True,
+                "title": "Engagement format"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "engagement_format",
+                    "queryName": "dashboards/01f0f51a424b1cc0bc6f5feba0c33948/datasets/01f1211b00e31b138b40bc8e12ff8573_engagement_format"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_quarter",
+            "queries": [
+              {
+                "name": "dashboards/01f0f51a424b1cc0bc6f5feba0c33948/datasets/01f1211b00e31b138b40bc8e12ff8573_quarter",
+                "query": {
+                  "datasetName": "ds_portfolio",
+                  "fields": [
+                    {
+                      "name": "quarter",
+                      "expression": "`quarter`"
+                    },
+                    {
+                      "name": "quarter_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": True,
+                "title": "Quarter (engagement)"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "quarter",
+                    "queryName": "dashboards/01f0f51a424b1cc0bc6f5feba0c33948/datasets/01f1211b00e31b138b40bc8e12ff8573_quarter"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 1,
+            "height": 2
+          }
         }
       ],
       "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
@@ -2049,25 +2229,30 @@ SERIALIZED_DASHBOARD: dict = {
 # -- API helpers --------------------------------------------------------------
 def update_dashboard(w: WorkspaceClient) -> None:
     """Update the existing dashboard in-place."""
+    from databricks.sdk.service.dashboards import Dashboard
+
     payload = json.dumps(SERIALIZED_DASHBOARD)
-    w.lakeview.update(
-        dashboard_id=DASHBOARD_ID,
+    dashboard = Dashboard(
         display_name=DISPLAY_NAME,
         warehouse_id=WAREHOUSE_ID,
         serialized_dashboard=payload,
     )
+    w.lakeview.update(dashboard_id=DASHBOARD_ID, dashboard=dashboard)
     print(f"Dashboard {DASHBOARD_ID} updated successfully.")
 
 
 def create_dashboard(w: WorkspaceClient) -> None:
     """Create a new dashboard (fresh copy)."""
+    from databricks.sdk.service.dashboards import Dashboard
+
     payload = json.dumps(SERIALIZED_DASHBOARD)
-    result = w.lakeview.create(
+    dashboard = Dashboard(
         display_name=DISPLAY_NAME,
         warehouse_id=WAREHOUSE_ID,
         serialized_dashboard=payload,
         parent_path=PARENT_PATH,
     )
+    result = w.lakeview.create(dashboard=dashboard)
     print(f"Dashboard created: {result.dashboard_id}")
 
 
