@@ -32,7 +32,9 @@ Google Docs smart chips (dropdowns) and a few link-wrapped template phrases resi
 ## Deploy paths
 
 **Target workspace:** `https://adb-2548836972759138.18.azuredatabricks.net` (Central Logfood)
-**Canonical data schema:** `main.field_strategist_cockpit.*` (schema creation requested; data migration tracked as backlog item T-206)
+**Goal end-state (target):** **Autoscaling Lakebase Postgres** as the OLTP store for app-managed state — scale-to-zero compute, branching, OLTP-grade write latency. Will replace the interim UC Delta write path as soon as Lakebase Autoscaling is GA on Central Logfood. Tracked as T-211.
+
+**Interim data store (this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*`, accessed via Databricks SQL warehouse + the `databricks-sql-connector`, scoped per-strategist via OBO. Data migration to this schema completed 2026-04-29; cockpit pivot to UC + DBSQL tracked as T-206. **This is a temporary architecture** until autoscaling Lakebase is available on Central Logfood.
 
 ```bash
 # Build the SPA and deploy
@@ -44,11 +46,13 @@ Alternate path via workspace import: `./upload_to_workspace.sh` (imports folders
 
 ## Pre-deploy checklist (from the backlog)
 
-Before the first logfood rollout, these backlog items should land and be tested:
+Before the first logfood rollout:
 
-- **T-101** Tighten CORS (SDR explicitly flagged)
-- **T-108** Security response headers (CSP, X-Frame-Options, etc. — SDR flagged)
-- **T-109** Tighten Pydantic validation — SDR flagged as "In progress"
-- **T-110** Document CSRF posture — SDR flagged as "N/A" with rationale
-- **T-205** Switch Databricks calls to OBO — SDR commitment, required for multi-user access
-- **T-206** Migrate data to `main.field_strategist_cockpit` + Lakebase — SDR resource matrix depends on it
+- ✅ **T-101 / T-108 / T-110** CORS removed; security headers middleware live; CSRF posture documented (closed in commits 002616f / 9ff3cde).
+- ✅ **T-109** Pydantic validation tightened with `Literal` enums + `HttpUrl` + `max_length`.
+- ✅ **T-209** Path traversal in SPA catch-all closed.
+- ✅ **T-207 / T-208** Per-user audit logging + Project DELETE ownership gating live.
+- ✅ **T-210** Runtime/dev deps split + hash-pinned via `uv pip compile`.
+- 🔄 **T-205** OBO plumbing — `current_user_email()` dep is in place; chat router still needs `WorkspaceClient(token=user_token)` once Apps OBO is greenlit.
+- 🔄 **T-206** Pivot the data layer from SQLite/SQLAlchemy to UC Delta + DBSQL. Schema is in place (`main.field_strategist_cockpit.*`); cockpit code refactor is the remaining work.
+- ⏳ **T-211** Lakebase migration — deferred until Lakebase is available on Central Logfood.

@@ -223,17 +223,32 @@ Landed in commits on `main`:
 - **Test / acceptance.** New `test_obo.py`: with `X-Forwarded-Access-Token: fake-token` and the WorkspaceClient mocked, assert the mocked constructor received the token. With no header and `ENV=prod`, chat returns 401. Integration test (manual): in logfood, a user without read on a resource gets a proper denied error rather than a blanket 200.
 - **Blast radius.** Chat router + new auth dep + app.yaml scopes. No schema change. Must land before T-206.
 
-### T-206 Migrate canonical data to `main.field_strategist_cockpit` and onto Lakebase
-- **Problem.** Today the app's ORM talks to local SQLite and the UC tables live in `home_felix_mutzl.strategist_canvas.*`. For logfood deployment we want (a) app state on Lakebase Postgres, (b) UC data in the new `main.field_strategist_cockpit` schema that the strategist group has access to.
+### T-206 Pivot the data layer from SQLite/SQLAlchemy to UC + DBSQL
+- **Problem.** The cockpit currently CRUDs against local SQLite via SQLAlchemy. For logfood we need to (a) read engagements from `main.field_strategist_cockpit.v_engagements_unified` via a SQL warehouse + OBO, and (b) write app-managed state to UC Delta tables (orphan engagements, app-private overlay, projects). Lakebase was the original target store but is **deferred** until available on Central Logfood (see T-211).
 - **Plan.**
-  1. Once the `main.field_strategist_cockpit` schema is created, write a one-time migration script (`scripts/migrate_uc_schema.py`) that copies the three tables/views from `home_felix_mutzl.strategist_canvas.*` under the new names.
-  2. Update `scripts/build_dashboard.py` datasets to point at the new schema.
-  3. Provision a Lakebase instance; set `DATABASE_URL` via `valueFrom` in `app.yaml`.
-  4. Run `python -m data.seed_database` against Lakebase once to bootstrap (guard with T-105 idempotency).
-  5. Add a `strategist_email` column to `engagement` and `project` and a FastAPI dependency that filters by the authenticated user (pairs with T-205).
-  6. Update `docs/architecture.md` and the SDR resource table.
-- **Test / acceptance.** With the Lakebase `DATABASE_URL`, `pytest` passes locally pointed at a throwaway Postgres in Docker (or a test Lakebase project). Two users in logfood see disjoint engagement lists. Dashboard still renders under new schema.
-- **Blast radius.** Non-trivial: schema, data, routers, tests. Ship behind a feature flag or via a versioned deploy.
+  1. New `src/backend/dbsql.py` — thin `databricks-sql-connector` wrapper that takes the user's OBO token (from T-205) and returns a contextually-managed cursor. Falls back to `DATABRICKS_TOKEN` in dev so pytest can run without forwarded headers.
+  2. Replace `src/backend/database.py` (SQLAlchemy engine) with two backends behind a feature flag (`DATA_BACKEND=sqlite|dbsql`):
+     - `dbsql` (target, prod): raw SQL through the warehouse, scoped per-strategist via OBO.
+     - `sqlite` (dev fallback): keep the SQLAlchemy path so `npm run dev` and tests stay fast and offline.
+  3. Replace `models.py` with a documented schema for the three app-managed UC tables: `engagements_manual`, `engagement_app_data` (overlay), `projects` (gallery). All three include a `strategist_email` column for tenancy.
+  4. Rewrite `routers/engagements.py` to read from `v_engagements_unified` and write to `engagements_manual` (orphans) + `engagement_app_data` (overlay).
+  5. Rewrite `routers/projects.py` to read/write `projects` directly via DBSQL.
+  6. Drop `data/seed_database.py` for prod (UC tables don't need seeding); keep it for the SQLite dev fallback.
+  7. Update `scripts/build_dashboard.py` if any dataset URIs need refreshing post-migration.
+  8. New tests under `tests/` mock the SQL warehouse client and assert the right SQL is constructed; golden-path integration test in CI when warehouse creds are available.
+- **Test / acceptance.** With `DATA_BACKEND=dbsql` and a logfood warehouse, two strategists see disjoint engagement lists; orphan creation lands in `engagements_manual`; dashboard still renders. With `DATA_BACKEND=sqlite`, the existing pytest suite still passes.
+- **Blast radius.** Significant: data layer, routers, tests, docs. 1–2 day refactor. Coordinate with T-205 (OBO must land first).
+
+### T-211 Migrate to autoscaling Lakebase Postgres once GA on Central Logfood (GOAL END-STATE)
+- **Problem.** The cockpit's app-managed state is currently on UC Delta + DBSQL — a deliberately **interim** choice because Lakebase Autoscaling is not yet GA on Central Logfood. The target end-state is autoscaling Lakebase Postgres for the OLTP write path: scale-to-zero compute, branching, OLTP-grade write latency. UC Delta then becomes the analytic projection only.
+- **Plan.** When Lakebase Autoscaling is GA in logfood:
+  1. Provision an autoscaling Lakebase instance `field_strategist_cockpit_oltp` in the workspace (configure scale-to-zero + branching).
+  2. Mirror the schemas of `engagements_manual`, `engagement_app_data`, `projects` into Postgres.
+  3. Cockpit writes flip from DBSQL Delta INSERT → Lakebase Postgres via SQLAlchemy / asyncpg. Reads of `v_engagements_unified` remain on the warehouse (analytics view).
+  4. Add a periodic Lakebase → UC reverse-sync job so the analytic projection in UC stays current for dashboards and Genie (per the migration doc's Step 4).
+  5. Update SDR + design doc to reintroduce the App-SP credential for Lakebase writes (alongside OBO reads). The original design's hybrid auth model returns.
+- **Test / acceptance.** Latency on engagement edits drops to <100ms p99. Reverse-sync job is monitored. SDR re-review (lightweight — the future shape is already declared as goal end-state).
+- **Blast radius.** Re-introduces a write store but the API surface stays the same (just swap the backend). Plan as a minor refactor when Lakebase ships.
 
 ## P3 — Future integrations
 

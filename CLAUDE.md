@@ -58,7 +58,10 @@ databricks apps deploy strategist-cockpit --source-code-path .
 ```
 
 ## Architecture (10-sec version)
-- FastAPI (`src/backend/main.py`) → SQLAlchemy → SQLite in dev, Lakebase Postgres in prod (via `DATABASE_URL`).
+- FastAPI (`src/backend/main.py`).
+- **Goal data layer (target end-state):** **Autoscaling Lakebase Postgres** as the OLTP store for app-managed state (scale-to-zero, branching, OLTP-grade write latency). Tracked as T-211 — blocked on Lakebase Autoscaling reaching GA on Central Logfood.
+- **Interim data layer (this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*` accessed via Databricks SQL warehouse + the `databricks-sql-connector`, OBO. Reads come from `v_engagements_unified` (joined SFDC + manual + revenue); writes go to `engagements_manual` (orphans), `engagement_app_data` (app-private overlay), and `projects` (gallery — both new Delta tables on first deploy). Tracked as T-206.
+- **Today's code:** SQLAlchemy 2 + SQLite for local dev only. Production code on UC + DBSQL is in flight under T-206.
 - Routers under `src/backend/routers/`: `engagements`, `projects`, `canvas`, `chat`. All mounted at `/api/*`.
 - React 18 + Vite + shadcn/ui + Tailwind. shadcn primitives under `src/ui/src/components/ui/`, custom in `components/`, pages in `pages/`.
 - FastAPI serves the built SPA from `static/` at the root; `/api/*` wins before the SPA catch-all.
@@ -82,10 +85,19 @@ databricks apps deploy strategist-cockpit --source-code-path .
 | `upload_to_workspace.sh` | Alt deploy path — uploads folders via `databricks workspace import_dir` |
 
 ## Unity Catalog assets the app depends on
-- `home_felix_mutzl.strategist_canvas.engagement_details` (Delta, from CSV)
-- `home_felix_mutzl.strategist_canvas.v_engagements_unified` (joins engagements + ASQ + accounts + revenue)
-- `home_felix_mutzl.strategist_canvas.engagements` (pre-existing strategist→accounts mapping)
+Read sources:
+- `main.field_strategist_cockpit.v_engagements_unified` (primary read surface — engagements ⋈ revenue + AE + territory)
+- `main.field_strategist_cockpit.v_engagements` (UNION of SFDC ASQs + manual orphans)
+- `main.field_strategist_cockpit.engagements_manual` (Delta — orphan engagements, also a write target)
+- `main.field_usage_dashboard.asq_uco` (daily SFDC snapshot, owned by Field Usage Dashboard team)
 - `main.gtm_gold.rpt_c360_overview_unpivoted` (revenue per account per period)
+
+App-managed write targets (created on first deploy):
+- `main.field_strategist_cockpit.engagements_manual` (INSERT new orphans)
+- `main.field_strategist_cockpit.engagement_app_data` (Delta — app-private overlay: `next_steps`, `related_documents`, etc.; tenancy by `strategist_email`)
+- `main.field_strategist_cockpit.projects` (Delta — gallery items; `created_by_email` for ownership)
+
+> Migration to `main.field_strategist_cockpit.*` completed 2026-04-29 (see Strategist Cockpit Migration.md in Felix's Drive). The UC Delta + DBSQL story is **interim**; the goal end-state is autoscaling Lakebase Postgres for app-managed state once it's GA on Central Logfood — see backlog T-211.
 
 ## Conventions
 - Python: FastAPI routers return pydantic models, not raw dicts. Filter params are always `Optional[str] = Query(None)`. Partial updates use `model_dump(exclude_unset=True)`.
@@ -106,7 +118,7 @@ databricks apps deploy strategist-cockpit --source-code-path .
 
 ## Don't do (and why)
 - **Don't deploy from an uncommitted tree.** Work is effectively unversioned today — commit in meaningful chunks before adding new features.
-- **Don't swap SQLite for Postgres locally** just to mirror prod. SQLite + seed is the faster devloop; Lakebase is only exercised via `DATABASE_URL` in Databricks Apps.
+- **Don't swap SQLite for a remote DB locally** just to mirror prod. SQLite + seed is the faster devloop. Prod targets UC + DBSQL via OBO; local dev points at SQLite.
 - **Don't hand-roll a second CRUD page.** `Engagements.tsx` is the reference: filter bar → KPI cards → chart → table with per-column filters + sort → view/edit/delete/add dialogs. Copy the pattern.
 - **Don't hardcode secrets.** `DATABRICKS_WAREHOUSE_ID` is an ID (not secret) — fine to default. Tokens and KA endpoint names come from env / `valueFrom` in `app.yaml`.
 - **Don't build a separate "Data Entry" page.** It was intentionally merged into `/engagements` on 2026-02-22 per the idea prompt.
