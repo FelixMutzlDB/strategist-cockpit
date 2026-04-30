@@ -354,6 +354,118 @@ SERIALIZED_DASHBOARD: dict = {
         "GROUP BY e.customer, eng_type, c.usage_date_string, c.fiscal_year, c.usage_date_fiscal_quarter_start\n",
         "ORDER BY e.customer, c.usage_date_fiscal_quarter_start\n"
       ]
+    },
+    {
+      "name": "ds_oneoff_impact_summary",
+      "displayName": "oneoff_impact_summary",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT\n",
+        "    src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        "  WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "eng_dated AS (\n",
+        "  SELECT *,\n",
+        "    CASE WHEN REGEXP_LIKE(quarter, '^FY[0-9]{2}Q[1-4]$') THEN\n",
+        "      make_date(CAST('20' || SUBSTRING(quarter, 3, 2) AS INT) - 1,\n",
+        "        CASE SUBSTRING(quarter, 6, 1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1)\n",
+        "    END AS engagement_quarter_start\n",
+        "  FROM eng WHERE engagement_type = 'One-off' AND quarter IS NOT NULL\n",
+        "),\n",
+        "eng_offsets AS (\n",
+        "  SELECT e.*, o.qtr_offset, add_months(e.engagement_quarter_start, 3 * o.qtr_offset) AS target_quarter\n",
+        "  FROM eng_dated e\n",
+        "  CROSS JOIN (SELECT 0 AS qtr_offset UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) o\n",
+        "  WHERE e.engagement_quarter_start IS NOT NULL\n",
+        "),\n",
+        "account_dbu AS (\n",
+        "  SELECT eo.strategist_email, eo.account_id, eo.engagement_quarter_start, eo.qtr_offset, eo.target_quarter,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM eng_offsets eo\n",
+        "  LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = eo.account_id AND c.date_grain = 'quarterly'\n",
+        "   AND c.usage_date_fiscal_quarter_start = eo.target_quarter AND c.bu1 = 'Central'\n",
+        "  GROUP BY 1,2,3,4,5\n",
+        "),\n",
+        "region_dbu AS (\n",
+        "  SELECT c.usage_date_fiscal_quarter_start AS target_quarter, AVG(quarterly_dbu) AS region_avg_dbu\n",
+        "  FROM (\n",
+        "    SELECT account_id, usage_date_fiscal_quarter_start, SUM(dbu_dollars) AS quarterly_dbu\n",
+        "    FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central'\n",
+        "    GROUP BY 1,2\n",
+        "  ) c GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.engagement_quarter_start, ad.qtr_offset,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth\n",
+        "  FROM account_dbu ad LEFT JOIN region_dbu rd ON rd.target_quarter = ad.target_quarter\n",
+        ")\n",
+        "SELECT CAST(qtr_offset AS STRING) AS qtr_offset, 'Advisor portfolio (avg)' AS series, AVG(account_growth) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
+        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY qtr_offset\n",
+        "UNION ALL\n",
+        "SELECT CAST(qtr_offset AS STRING) AS qtr_offset, 'Central region (avg)' AS series, AVG(region_growth) AS avg_growth, NULL AS n_accounts\n",
+        "FROM joined WHERE region_growth IS NOT NULL GROUP BY qtr_offset\n",
+        "ORDER BY qtr_offset, series\n"
+      ]
+    },
+    {
+      "name": "ds_focus_impact_summary",
+      "displayName": "focus_impact_summary",
+      "queryLines": [
+        "WITH eng AS (\n",
+        "  SELECT\n",
+        "    src.account_id, src.customer, src.strategist_email,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
+        "  FROM main.field_strategist_cockpit.v_engagements_unified src\n",
+        "  WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "focus_engagements AS (\n",
+        "  SELECT *, CAST('20' || SUBSTRING(fy_clean, 3, 2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng WHERE engagement_type = 'Focus' AND REGEXP_LIKE(fy_clean, '^FY[0-9]{2}$')\n",
+        "),\n",
+        "focus_offsets AS (\n",
+        "  SELECT f.*, o.fy_offset, f.engagement_fy_int + o.fy_offset AS target_fy\n",
+        "  FROM focus_engagements f CROSS JOIN (SELECT 0 AS fy_offset UNION ALL SELECT 1) o\n",
+        "),\n",
+        "account_fy_dbu AS (\n",
+        "  SELECT fo.strategist_email, fo.account_id, fo.engagement_fy_int, fo.fy_offset, fo.target_fy,\n",
+        "    SUM(c.dbu_dollars) AS account_dbu\n",
+        "  FROM focus_offsets fo\n",
+        "  LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = fo.account_id AND c.date_grain = 'quarterly'\n",
+        "   AND c.fiscal_year = fo.target_fy AND c.bu1 = 'Central'\n",
+        "  GROUP BY 1,2,3,4,5\n",
+        "),\n",
+        "region_fy_dbu AS (\n",
+        "  SELECT c.fiscal_year AS target_fy, AVG(annual_dbu) AS region_avg_dbu\n",
+        "  FROM (\n",
+        "    SELECT account_id, fiscal_year, SUM(dbu_dollars) AS annual_dbu\n",
+        "    FROM main.gtm_gold.rpt_c360_overview_unpivoted WHERE date_grain='quarterly' AND bu1='Central'\n",
+        "    GROUP BY 1, 2\n",
+        "  ) c GROUP BY 1\n",
+        "),\n",
+        "joined AS (\n",
+        "  SELECT ad.strategist_email, ad.account_id, ad.engagement_fy_int, ad.fy_offset,\n",
+        "    try_divide(ad.account_dbu - FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(ad.account_dbu) OVER (PARTITION BY ad.account_id, ad.engagement_fy_int ORDER BY ad.fy_offset)) AS account_growth,\n",
+        "    try_divide(rd.region_avg_dbu - FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset),\n",
+        "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_fy_int ORDER BY ad.fy_offset)) AS region_growth\n",
+        "  FROM account_fy_dbu ad LEFT JOIN region_fy_dbu rd ON rd.target_fy = ad.target_fy\n",
+        ")\n",
+        "SELECT CAST(fy_offset AS STRING) AS fy_offset, 'Advisor portfolio (avg)' AS series, AVG(account_growth) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
+        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY fy_offset\n",
+        "UNION ALL\n",
+        "SELECT CAST(fy_offset AS STRING) AS fy_offset, 'Central region (avg)' AS series, AVG(region_growth) AS avg_growth, NULL AS n_accounts\n",
+        "FROM joined WHERE region_growth IS NOT NULL GROUP BY fy_offset\n",
+        "ORDER BY fy_offset, series\n"
+      ]
     }
   ],
   "pages": [
@@ -368,7 +480,7 @@ SERIALIZED_DASHBOARD: dict = {
               "lines": [
                 "# Strategist Impact Dashboard\n",
                 "\n",
-                "Data & AI Strategist portfolio overview \u2014 measuring activity and impact across Focus and One-off engagements.\n",
+                "Data & AI Strategist portfolio overview — measuring activity and impact across Focus and One-off engagements.\n",
                 "Inspired by the [Impact Players](https://thewisemangroup.com/books/impact-players/) framework: measuring **what changed** because of what you did."
               ]
             }
@@ -913,7 +1025,7 @@ SERIALIZED_DASHBOARD: dict = {
               "lines": [
                 "# Focus Engagements\n",
                 "\n",
-                "Multi-quarter, deep strategic engagements \u2014 the core of impact work. These are accounts where sustained advisory drives measurable transformation."
+                "Multi-quarter, deep strategic engagements — the core of impact work. These are accounts where sustained advisory drives measurable transformation."
               ]
             }
           },
@@ -1272,7 +1384,7 @@ SERIALIZED_DASHBOARD: dict = {
               "lines": [
                 "# One-off Engagements\n",
                 "\n",
-                "Targeted, topic-specific engagements \u2014 keynotes, points of view, and advisory sessions that extend strategic reach across the portfolio."
+                "Targeted, topic-specific engagements — keynotes, points of view, and advisory sessions that extend strategic reach across the portfolio."
               ]
             }
           },
@@ -1510,7 +1622,7 @@ SERIALIZED_DASHBOARD: dict = {
               "lines": [
                 "# Impact Analysis\n",
                 "\n",
-                "Measuring what changed \u2014 comparing advisor portfolio growth against the regional benchmark.\n",
+                "Measuring what changed — comparing advisor portfolio growth against the regional benchmark.\n",
                 "Impact = revenue growth in strategist-engaged accounts vs. non-engaged baseline (Central region)."
               ]
             }
@@ -1719,7 +1831,7 @@ SERIALIZED_DASHBOARD: dict = {
               },
               "frame": {
                 "showTitle": True,
-                "title": "All Engaged Accounts \u2014 Quarterly Revenue Trajectory"
+                "title": "All Engaged Accounts — Quarterly Revenue Trajectory"
               }
             }
           },
@@ -1802,6 +1914,172 @@ SERIALIZED_DASHBOARD: dict = {
             "y": 13,
             "width": 6,
             "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "header_impact_compare",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Per-engagement impact: account growth vs Central region average\n",
+                "\n",
+                "For each engagement we anchor the account's revenue at the engagement quarter (offset 0) and compare growth in subsequent periods against the Central region's average growth over the same window. Above the regional line means the engaged account is outpacing the benchmark.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 20,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_oneoff_impact",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_oneoff_impact_summary",
+                  "fields": [
+                    {
+                      "name": "qtr_offset",
+                      "expression": "`qtr_offset`"
+                    },
+                    {
+                      "name": "avg(avg_growth)",
+                      "expression": "AVG(`avg_growth`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "qtr_offset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "qtr offset"
+                },
+                "y": {
+                  "fieldName": "avg(avg_growth)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Avg growth vs baseline"
+                },
+                "color": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "One-off engagements — advisor portfolio vs Central region (avg growth from engagement Q0)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_focus_impact",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_impact_summary",
+                  "fields": [
+                    {
+                      "name": "fy_offset",
+                      "expression": "`fy_offset`"
+                    },
+                    {
+                      "name": "avg(avg_growth)",
+                      "expression": "AVG(`avg_growth`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "fy_offset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "fy offset"
+                },
+                "y": {
+                  "fieldName": "avg(avg_growth)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Avg growth vs baseline"
+                },
+                "color": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Focus engagements — advisor portfolio vs Central region (avg growth from engagement FY)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 28,
+            "width": 6,
+            "height": 6
           }
         }
       ],
