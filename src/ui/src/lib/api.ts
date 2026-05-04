@@ -120,3 +120,15 @@ export interface CanvasSummary {
 export function getCanvasSummary(activity: string): Promise<CanvasSummary> {
   return fetchJSON(`/canvas/summary/${activity}`);
 }
+
+// --- Runtime Config (T-201 / T-202) ---
+export interface AppConfig {
+  databricks_host: string;
+  lakeview_dashboard_id: string;
+  genie_space_id: string;
+  data_backend: string;
+}
+
+export function getAppConfig(): Promise<AppConfig> {
+  return fetchJSON("/config/");
+}

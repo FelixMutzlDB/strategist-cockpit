@@ -3,8 +3,17 @@ import Home from "./pages/Home";
 import Canvas from "./pages/Canvas";
 import Engagements from "./pages/Engagements";
 import Gallery from "./pages/Gallery";
+import Impact from "./pages/Impact";
+import Ask from "./pages/Ask";
 import { StrategoChat } from "./components/StrategoChat";
-import { LayoutGrid, Compass, BarChart3, FolderOpen } from "lucide-react";
+import {
+  LayoutGrid,
+  Compass,
+  BarChart3,
+  FolderOpen,
+  PieChart,
+  Sparkles,
+} from "lucide-react";
 
 function NavLink({
   to,
@@ -54,6 +63,12 @@ export default function App() {
             <NavLink to="/engagements" icon={BarChart3}>
               Engagements
             </NavLink>
+            <NavLink to="/impact" icon={PieChart}>
+              Impact
+            </NavLink>
+            <NavLink to="/ask" icon={Sparkles}>
+              Ask
+            </NavLink>
             <NavLink to="/gallery" icon={FolderOpen}>
               Gallery
             </NavLink>
@@ -67,6 +82,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/canvas" element={<Canvas />} />
           <Route path="/engagements" element={<Engagements />} />
+          <Route path="/impact" element={<Impact />} />
+          <Route path="/ask" element={<Ask />} />
           <Route path="/gallery" element={<Gallery />} />
         </Routes>
       </main>

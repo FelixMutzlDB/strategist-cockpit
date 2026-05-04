@@ -1,6 +1,13 @@
 import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Compass, BarChart3, FolderOpen, Bot } from "lucide-react";
+import {
+  Compass,
+  BarChart3,
+  FolderOpen,
+  Bot,
+  PieChart,
+  Sparkles,
+} from "lucide-react";
 
 const tiles = [
   {
@@ -20,6 +27,24 @@ const tiles = [
     to: "/engagements",
     color: "from-emerald-500/10 to-teal-500/10",
     iconColor: "text-emerald-600",
+  },
+  {
+    title: "Impact Dashboard",
+    description:
+      "Engagement impact, revenue lift, and territory comparisons -- the embedded AI/BI Lakeview view.",
+    icon: PieChart,
+    to: "/impact",
+    color: "from-rose-500/10 to-pink-500/10",
+    iconColor: "text-rose-600",
+  },
+  {
+    title: "Ask the Data",
+    description:
+      "Natural-language Q&A over your engagements + revenue, powered by the Strategist Cockpit Genie.",
+    icon: Sparkles,
+    to: "/ask",
+    color: "from-indigo-500/10 to-purple-500/10",
+    iconColor: "text-indigo-600",
   },
   {
     title: "Projects Gallery",
@@ -62,7 +87,7 @@ export default function Home() {
       </div>
 
       {/* Navigation Tiles */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {tiles.map((tile) => (
           <Link key={tile.to} to={tile.to} className="group">
             <Card className="h-full transition-all hover:shadow-md hover:border-primary/20 group-hover:-translate-y-0.5">

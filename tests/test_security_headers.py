@@ -53,3 +53,14 @@ def test_no_cors_headers(health_response):
     # We removed CORSMiddleware — a plain GET should not produce these.
     assert "Access-Control-Allow-Origin" not in health_response.headers
     assert "Access-Control-Allow-Credentials" not in health_response.headers
+
+
+def test_csp_frame_src_picks_up_workspace_host_when_configured(client, monkeypatch):
+    """T-201/T-202: when CSP_FRAME_SRC is set to the workspace host, the
+    Lakeview + Genie iframes must be allowed without `'none'` blocking them."""
+    monkeypatch.setenv("CSP_FRAME_SRC", "adb-2548836972759138.18.azuredatabricks.net")
+    resp = client.get("/api/health")
+    csp = resp.headers.get("Content-Security-Policy", "")
+    assert "adb-2548836972759138.18.azuredatabricks.net" in csp
+    assert "frame-src 'self' adb-" in csp
+    assert "frame-src 'none'" not in csp

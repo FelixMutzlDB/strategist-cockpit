@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.backend.database import init_db
 from src.backend.middleware import SecurityHeadersMiddleware
-from src.backend.routers import canvas, chat, engagements, projects
+from src.backend.routers import canvas, chat, config, engagements, projects
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ app.include_router(engagements.router)
 app.include_router(projects.router)
 app.include_router(canvas.router)
 app.include_router(chat.router)
+app.include_router(config.router)
 
 
 @app.get("/api/health")
