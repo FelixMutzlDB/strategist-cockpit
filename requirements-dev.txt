@@ -298,9 +298,9 @@ databricks-sdk==0.105.0 \
     --hash=sha256:c52bf21c5e5814bc3d741a98fc772f4b6f1f9cfa08e90bf7580aa1592bc92e92 \
     --hash=sha256:f1624e434588e2174052bc3646670f17581f3bb269b9438f9121e9df4a59eebd
     # via strategist-cockpit (pyproject.toml)
-databricks-sql-connector==4.2.5 \
-    --hash=sha256:31cee10552ce77a830318ce9488fc5e67daca7abbcdf0d8d34f12a180bc55039 \
-    --hash=sha256:762df7568ef1998540f96b20cad6f1aaae87d1aad54e40e528f87e4524397291
+databricks-sql-connector==4.2.6 \
+    --hash=sha256:61e0f425c990a0ec52c31165ea7dd0582cc0ad90c5fbd5fc9bea59bb38faeb00 \
+    --hash=sha256:65e59f08e55dcc563c05e02e2321d5171dd9482e5792328d99ac097377795d01
     # via strategist-cockpit (pyproject.toml)
 et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
