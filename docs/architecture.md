@@ -5,40 +5,47 @@
 Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and React frontend. It integrates with Databricks Unity Catalog, AI/BI Dashboards, Genie Spaces, and Model Serving endpoints.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Browser (React)                    │
-│  Home  │  Canvas  │  Engagements  │  Gallery          │
-│                  + Stratego Chat                     │
-└────────────────────┬────────────────────────────────┘
-                     │ /api/*
-┌────────────────────▼────────────────────────────────┐
-│              FastAPI Backend (uvicorn)                │
-│  routers: engagements, projects, canvas, chat        │
-│  SQLAlchemy ORM  │  Pydantic schemas                 │
-│  SecurityHeadersMiddleware (CSP, X-Frame-Options …)  │
-└───────┬──────────┬──────────────────┬───────────────┘
-        │          │                  │
-   ┌────▼───┐  ┌──▼──────────┐  ┌───▼──────────────┐
-   │SQLite/ │  │ Databricks  │  │ Databricks Model │
-   │Lakebase│  │ Unity Cat.  │  │ Serving (Stratego│
-   │  (DB)  │  │ Delta Tables│  │ KA endpoint)     │
-   └────────┘  └──────┬──────┘  └──────────────────┘
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-   engagement    v_engagements   rpt_c360_
-   _details      _unified        overview_
-                                 unpivoted
+┌──────────────────────────────────────────────────────────────────┐
+│                       Browser (React)                            │
+│  Home  │  Canvas  │  Engagements  │  Impact  │  Ask  │  Gallery  │
+│                       + Stratego Chat                            │
+└────────────────────────┬─────────────────────────────────────────┘
+                         │ /api/*  +  iframes /embed/dashboardsv3, /embed/genie
+┌────────────────────────▼─────────────────────────────────────────┐
+│                  FastAPI Backend (uvicorn)                       │
+│  routers: engagements, projects, canvas, chat, config            │
+│  repos: engagements_repo, projects_repo (DBSQL path)             │
+│  auth: current_user_email + current_user_token (OBO)             │
+│  SecurityHeadersMiddleware (CSP, X-Frame-Options …)              │
+└───┬────────────┬─────────────────┬─────────────────┬─────────────┘
+    │ DATA_      │ DATA_           │                 │
+    │ BACKEND=   │ BACKEND=        │ /embed/...      │ /serving-endpoints/
+    │ sqlite     │ dbsql           │ via iframe      │ (OBO)
+    ▼            ▼                 ▼                 ▼
+  SQLite     ┌──────────────┐  ┌──────────────┐  Stratego KA
+  (dev)      │ Databricks   │  │  Databricks  │  (Model Serving)
+             │ SQL warehouse│  │  AI/BI Dash. │
+             │ + UC Delta   │  │  + Genie     │
+             └──────┬───────┘  └──────────────┘
+                    │
+          ┌─────────┼─────────────┐
+          ▼         ▼             ▼
+   v_engagements  engagements_  rpt_c360_
+   _unified      manual +       overview_
+                 engagement_    unpivoted
+                 app_data +
+                 projects
 ```
 
 ## Backend
 
 - **Framework**: FastAPI 0.115+
 - **Validation**: Pydantic 2.10+ / pydantic-settings
-- **Data layer (interim — this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*`, accessed via Databricks SQL warehouse + the `databricks-sql-connector`, scoped to the logged-in user via OBO (`X-Forwarded-Access-Token`). Tracked as T-206.
+- **Data layer (interim — production):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*`, accessed via Databricks SQL warehouse + the `databricks-sql-connector`, scoped to the logged-in user via OBO (`X-Forwarded-Access-Token`). Selected by `DATA_BACKEND=dbsql`. Closed under T-206.
 - **Data layer (goal end-state):** Autoscaling Lakebase Postgres for app-managed state — scale-to-zero compute, branching, OLTP-grade write latency. Will replace the UC Delta write path as soon as Lakebase Autoscaling is GA on Central Logfood. UC Delta retained as the analytic projection. Tracked as T-211.
-- **Data layer (today's code):** SQLAlchemy 2 + SQLite for local dev only. Production code lands as part of T-206.
+- **Data layer (dev / pytest):** SQLAlchemy 2 + SQLite. Selected by `DATA_BACKEND=sqlite` (the default). Same router code, branched in two places.
 - **Entry point**: `src/backend/main.py`
+- **Auth**: `src/backend/auth.py` exposes `current_user_email()` (from `X-Forwarded-Email`) and `current_user_token()` (from `X-Forwarded-Access-Token`). Both have dev fallbacks; `STRICT_AUTH=1` makes missing headers a hard 401.
 - **Security middleware**: `src/backend/middleware.py` stamps CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy on every response.
 
 ### API Routers
@@ -48,13 +55,15 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 | `engagements` | `/api/engagements` | CRUD with query filtering (fy, engagement_type, status, customer) |
 | `projects` | `/api/projects` | CRUD for gallery project items |
 | `canvas` | `/api/canvas` | Keyword-matched canvas activity summaries |
-| `chat` | `/api/chat` | Stratego chatbot (KA proxy with offline fallback) |
+| `chat` | `/api/chat` | Stratego chatbot — KA proxy via `WorkspaceClient(token=user_token)` per-request OBO. Offline fallback when `STRATEGO_ENDPOINT_NAME` is unset. |
+| `config` | `/api/config` | Public runtime config: workspace host, dashboard ID, Genie space ID, active data backend. Consumed by Impact/Ask pages on load. |
 
-### Database Models
+### Data layer dispatch
 
-**Engagement**: customer, engagement_title, engagement_type (Focus/One-off/Customer Event/Tbc), status, fy, quarter, ae, asq_id, asq_url, uco_ids, actionable_outcome, next_steps, related_documents, timeframe.
+Each router has two paths, gated by `settings.data_backend`:
 
-**Project**: name, description, url, thumbnail_url, category, created_at.
+- **`sqlite`** (dev): SQLAlchemy ORM via `database.py` + `models.py`. `Engagement` and `Project` tables created in-process by SQLite. Tenancy not enforced (single-user dev).
+- **`dbsql`** (prod): repository functions in `src/backend/repos/` open a `databricks-sql` connection authorized with `current_user_token()` and execute parameterised SQL against `v_engagements_unified` (read), `engagements_manual` (orphan writes), `engagement_app_data` (overlay), and `projects` (gallery). Every SELECT carries `WHERE strategist_email = :email`; every INSERT stamps that column from the auth dep, never from payload. DDL for these tables is in `scripts/init_uc_tables.sql` and is owned by ops, not the app.
 
 ## Frontend
 
@@ -69,7 +78,9 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 |------|-------|-------------|
 | Home | `/` | Welcome from Stratego + navigation tiles |
 | Canvas | `/canvas` | Interactive strategist canvas with dialog summaries per activity |
-| Engagements | `/engagements` | KPIs, quarter chart, filter bar (global search + FY + type + status dropdowns), sortable table with per-column filters, CRUD with view/edit/delete actions. Absorbs what used to live under `/impact` and `/data-entry`. |
+| Engagements | `/engagements` | KPIs, quarter chart, filter bar (global search + FY + type + status dropdowns), sortable table with per-column filters, CRUD with view/edit/delete actions. |
+| Impact | `/impact` | Embedded Lakeview "Strategist Impact Dashboard" — iframe to `https://<host>/embed/dashboardsv3/<id>`, deep-link to the dashboard in Databricks (T-201). |
+| Ask | `/ask` | Embedded "Strategist Cockpit Genie" — iframe to `https://<host>/embed/genie/<id>` (T-202). |
 | Gallery | `/gallery` | Project thumbnail tiles with add/delete |
 
 ### Key Components
@@ -117,15 +128,17 @@ Tracked as backlog item T-211.
 
 ### AI/BI Dashboard
 
-The "Strategist Impact Dashboard" is defined in `scripts/build_dashboard.py` (Lakeview REST). Five pages: Executive Summary, Focus Engagements, One-off Engagements, Impact Analysis, Global Filters. The in-app `/impact` embed is tracked as T-201.
+The "Strategist Impact Dashboard" is defined in `scripts/build_dashboard.py` (Lakeview REST). Five pages: Executive Summary, Focus Engagements, One-off Engagements, Impact Analysis, Global Filters. Embedded in the app at `/impact` (T-201, closed) — see "Pages".
+
+**Embed prerequisite:** a workspace admin must allowlist the app's host under **Settings → Security → External access → Embed dashboards** before the iframe will render. The CSP `frame-src` host is also configured via the `CSP_FRAME_SRC` env var (set to the workspace host, space-separated if multiple).
 
 ### Genie Space
 
-"Strategist Cockpit Genie" provides natural language queries over the unified engagement view and revenue data. In-app embed is tracked as T-202.
+"Strategist Cockpit Genie" provides natural language queries over the unified engagement view and revenue data. Embedded in the app at `/ask` (T-202, closed). Same workspace allowlisting prerequisite as the dashboard. Genie iframe embedding is currently in Beta — check the `/embed/genie/<id>` URL pattern matches your workspace's release.
 
 ### Stratego Chat (Knowledge Assistant)
 
-When `STRATEGO_ENDPOINT_NAME` is configured, `/api/chat` proxies messages to a Databricks Knowledge Assistant via `databricks-sdk`. When the endpoint is not configured (local dev without creds), the router returns a single short offline message — no keyword ladder.
+When `STRATEGO_ENDPOINT_NAME` is configured, `/api/chat` proxies messages to a Databricks Knowledge Assistant via `databricks-sdk`. The `WorkspaceClient` is constructed **per-request** with the user's OBO access token (T-205, closed) — the call is authorized as the strategist, not the app SP. When the endpoint is not configured (local dev), the router returns a single short offline message.
 
 ## Security
 
@@ -161,15 +174,21 @@ All settings are managed via environment variables (or `.env` file), loaded by `
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:///strategist_cockpit.db` | Database connection string |
-| `DATABRICKS_HOST` | (empty) | Workspace URL |
-| `DATABRICKS_WAREHOUSE_ID` | `071969b1ec9a91ca` | SQL warehouse for queries |
+| `DATABASE_URL` | `sqlite:///strategist_cockpit.db` | SQLite path used when `DATA_BACKEND=sqlite` |
+| `DATA_BACKEND` | `sqlite` | `sqlite` (dev / pytest) or `dbsql` (prod, UC + DBSQL via OBO) |
+| `DATABRICKS_HOST` | (empty) | Workspace URL — required for `dbsql`, embeds, and KA |
+| `DATABRICKS_WAREHOUSE_ID` | `071969b1ec9a91ca` | SQL warehouse for `dbsql` reads/writes |
 | `STRATEGO_ENDPOINT_NAME` | (empty) | Serving endpoint for Stratego KA |
+| `LAKEVIEW_DASHBOARD_ID` | (empty) | Dashboard ID surfaced at `/impact` (T-201). Empty → page shows fallback card. |
+| `GENIE_SPACE_ID` | (empty) | Genie space ID surfaced at `/ask` (T-202). Empty → page shows fallback card. |
+| `STRICT_AUTH` | (empty) | Set to `1` in prod so missing `X-Forwarded-Email` / `X-Forwarded-Access-Token` returns 401 instead of dev fallback |
+| `ADMIN_EMAILS` | `felix.mutzl@databricks.com,marco.metting@databricks.com` | Comma-separated. Used by `is_admin()` for project-DELETE override. |
+| `DEV_USER_EMAIL` | `dev@local` | Local-dev fallback email when `X-Forwarded-Email` is absent. |
 | `DATABRICKS_APP_PORT` | `8000` | Port for the FastAPI server |
-| `CSP_FRAME_SRC` | (empty) | Space-separated hosts allowed in `frame-src` (dashboard/Genie embeds) |
+| `CSP_FRAME_SRC` | (empty) | Space-separated hosts allowed in `frame-src` (dashboard/Genie embeds — set to the workspace host in prod) |
 | `CSP_CONNECT_SRC` | (empty) | Space-separated hosts allowed in `connect-src` (KA endpoint, etc.) |
 
-`DATABRICKS_TOKEN` is read automatically by the Databricks SDK when set; the app does not surface it as a Pydantic setting.
+`DATABRICKS_TOKEN` is read automatically by the Databricks SDK when set; the app uses it only as the dev fallback for `current_user_token()` (with a one-shot warning so a misconfigured prod surface is loud).
 
 ## Deployment
 

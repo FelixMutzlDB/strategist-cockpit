@@ -37,21 +37,37 @@ The frontend dev server proxies `/api` requests to the backend at `localhost:800
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env` and configure (full list in `docs/architecture.md`):
 
 ```bash
+# Data layer
+DATA_BACKEND=sqlite                       # 'sqlite' for dev, 'dbsql' for prod (UC + warehouse)
 DATABASE_URL=sqlite:///strategist_cockpit.db
-DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-DATABRICKS_TOKEN=dapi...
+
+# Databricks workspace
+DATABRICKS_HOST=adb-...azuredatabricks.net
+DATABRICKS_TOKEN=dapi...                  # dev fallback for current_user_token()
 DATABRICKS_WAREHOUSE_ID=071969b1ec9a91ca
-STRATEGO_ENDPOINT_NAME=         # leave empty for fallback chat
+STRATEGO_ENDPOINT_NAME=                   # serving endpoint name; empty → offline chat
+
+# Embeds (T-201 / T-202)
+LAKEVIEW_DASHBOARD_ID=                    # empty → /impact shows fallback card
+GENIE_SPACE_ID=                           # empty → /ask shows fallback card
+
+# Auth (prod)
+STRICT_AUTH=                              # set to '1' in prod; missing OBO header → 401
+DEV_USER_EMAIL=                           # local-dev fallback for X-Forwarded-Email
+
+# CSP (prod)
+CSP_FRAME_SRC=                            # set to workspace host so iframes load
+CSP_CONNECT_SRC=
 ```
 
 ## Database
 
-### Local Development (SQLite)
+### Local Development (SQLite, default)
 
-The default `DATABASE_URL` uses SQLite. The database file `strategist_cockpit.db` is created automatically on first run and excluded via `.gitignore`.
+The default `DATA_BACKEND=sqlite` uses SQLAlchemy + SQLite. `strategist_cockpit.db` is created automatically on first run and excluded via `.gitignore`.
 
 ### Seeding Data
 
@@ -59,14 +75,15 @@ The default `DATABASE_URL` uses SQLite. The database file `strategist_cockpit.db
 python -m data.seed_database
 ```
 
-This reads `data/engagements.csv` and inserts records into the `engagements` table, plus creates default projects (Systems of Intelligence, Innovation Factory).
+Reads `data/engagements.csv` and inserts records into the `engagements` table, plus creates default projects (Systems of Intelligence, Innovation Factory). Idempotent unless `--force`.
 
-### Production (Lakebase PostgreSQL)
+### Production (DBSQL, UC Delta over OBO)
 
-Set `DATABASE_URL` to the Lakebase connection string:
-```
-postgresql://user:token@host:port/databricks_postgres?sslmode=require
-```
+Set `DATA_BACKEND=dbsql` and provide `DATABRICKS_HOST` + `DATABRICKS_WAREHOUSE_ID`. The app opens a per-request `databricks-sql` connection authorized with the strategist's OBO token (`current_user_token()`). Reads come from `v_engagements_unified`; writes target `engagements_manual` / `engagement_app_data` / `projects`. Run `scripts/init_uc_tables.sql` once per environment before first boot.
+
+### Future (Lakebase, T-211)
+
+Tracked but deferred until Lakebase Autoscaling is GA on Central Logfood.
 
 ## Frontend Development
 
@@ -125,41 +142,60 @@ The `app.yaml` configuration controls the runtime command and environment variab
 
 ```
 strategist-cockpit/
-├── app.yaml                    # Databricks Apps configuration
+├── app.yaml                    # Databricks Apps config + user_authorization scopes
 ├── pyproject.toml              # Python project metadata
-├── requirements.txt            # Python dependencies
+├── requirements.txt            # Hash-pinned runtime deps
+├── requirements-dev.txt        # Hash-pinned runtime + dev deps
 ├── data/
-│   ├── engagements.csv         # Source engagement data
-│   ├── seed_database.py        # Database seeder script
-│   └── stratego_context.md     # KA context document
+│   ├── engagements.csv         # Source engagement data (SQLite seeder)
+│   ├── seed_database.py        # Idempotent SQLite seeder
+│   └── stratego_context.md     # KA context document (KA-side, not loaded by code)
 ├── docs/                       # Project documentation
+│   ├── architecture.md
+│   ├── api-reference.md
+│   ├── deployment.md
+│   ├── development.md
+│   ├── lessons-learned.md      # Design choices, testing patterns, gotchas
+│   └── tasks/todo.md           # Backlog (P0–P3 + closed log)
+├── scripts/
+│   ├── build_dashboard.py      # Lakeview dashboard build (one-shot IaC)
+│   └── init_uc_tables.sql      # UC Delta DDL — run once per env (T-206)
 ├── src/
 │   ├── backend/
 │   │   ├── main.py             # FastAPI entry point
-│   │   ├── config.py           # Settings (env vars)
-│   │   ├── database.py         # SQLAlchemy engine/session
-│   │   ├── models.py           # ORM models
+│   │   ├── config.py           # Settings (env vars + DATA_BACKEND flag)
+│   │   ├── auth.py             # current_user_email + current_user_token (OBO)
+│   │   ├── audit.py            # record_event (structured JSON to stdout)
+│   │   ├── middleware.py       # SecurityHeadersMiddleware (CSP, etc.)
+│   │   ├── database.py         # SQLAlchemy engine/session (sqlite path)
+│   │   ├── models.py           # ORM models (sqlite path)
 │   │   ├── schemas.py          # Pydantic schemas
+│   │   ├── dbsql.py            # databricks-sql wrapper (dbsql path)
+│   │   ├── repos/
+│   │   │   ├── engagements_repo.py  # DBSQL queries for engagements
+│   │   │   └── projects_repo.py     # DBSQL queries for projects
 │   │   └── routers/
-│   │       ├── engagements.py  # CRUD endpoints
-│   │       ├── projects.py     # Gallery endpoints
+│   │       ├── engagements.py  # CRUD endpoints (dispatches on data_backend)
+│   │       ├── projects.py     # Gallery endpoints (dispatches on data_backend)
 │   │       ├── canvas.py       # Canvas summaries
-│   │       └── chat.py         # Stratego chatbot
+│   │       ├── chat.py         # Stratego chat (per-request OBO WorkspaceClient)
+│   │       └── config.py       # /api/config (dashboard ID, Genie ID, host)
 │   └── ui/
 │       ├── index.html          # HTML entry point
 │       ├── package.json        # Frontend dependencies
 │       ├── vite.config.ts      # Vite build config
-│       ├── public/
-│       │   └── compass.svg     # Favicon
+│       ├── public/compass.svg  # Favicon
 │       └── src/
-│           ├── App.tsx          # Root component + routing
+│           ├── App.tsx          # Routing + nav (Home, Canvas, Engagements, Impact, Ask, Gallery)
 │           ├── lib/
-│           │   ├── api.ts       # API client functions
+│           │   ├── api.ts       # API client + types (incl. AppConfig)
 │           │   └── utils.ts     # Tailwind utilities
 │           ├── pages/
 │           │   ├── Home.tsx
 │           │   ├── Canvas.tsx
 │           │   ├── Engagements.tsx
+│           │   ├── Impact.tsx   # Lakeview iframe (T-201)
+│           │   ├── Ask.tsx      # Genie iframe (T-202)
 │           │   └── Gallery.tsx
 │           └── components/
 │               ├── StrategistCanvas.tsx

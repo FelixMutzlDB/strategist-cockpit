@@ -2,6 +2,17 @@
 
 Base URL: `/api`
 
+## Authentication
+
+The app runs behind the Databricks Apps auth proxy in production. Every state-changing endpoint depends on:
+
+- **`X-Forwarded-Email`** — used as the strategist identity for audit, ownership, and tenancy filtering (`current_user_email()`).
+- **`X-Forwarded-Access-Token`** — the user's OBO access token; used to authorize Databricks calls (KA serving endpoint, SQL warehouse) as the strategist (`current_user_token()`).
+
+In production (`STRICT_AUTH=1`) missing headers return **401**. In local dev the deps fall back to `DEV_USER_EMAIL` / `DATABRICKS_TOKEN`.
+
+`/api/config` and `/api/health` are unauthenticated — they're consumed before the SPA has any user context.
+
 ## Health Check
 
 ```
@@ -9,6 +20,25 @@ GET /api/health
 ```
 
 Returns `{"status": "ok", "app": "strategist-cockpit"}`.
+
+## Runtime Config
+
+```
+GET /api/config/
+```
+
+Returns the SPA's runtime config:
+
+```json
+{
+  "databricks_host": "adb-2548836972759138.18.azuredatabricks.net",
+  "lakeview_dashboard_id": "<id>",
+  "genie_space_id": "<id>",
+  "data_backend": "dbsql"
+}
+```
+
+Empty values mean the corresponding feature is not configured — the SPA renders a fallback card on `/impact` or `/ask` when the dashboard / Genie ID is empty.
 
 ---
 
@@ -160,7 +190,7 @@ Content-Type: application/json
 }
 ```
 
-Routes to Databricks Knowledge Assistant if `STRATEGO_ENDPOINT_NAME` is configured, otherwise uses keyword-based fallback.
+Routes to Databricks Knowledge Assistant when `STRATEGO_ENDPOINT_NAME` is configured. The `WorkspaceClient` is constructed per-request with the user's OBO access token from `X-Forwarded-Access-Token`. When the endpoint is unset (local dev without creds) the router returns a fixed offline message.
 
 **Response**:
 ```json

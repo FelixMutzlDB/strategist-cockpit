@@ -53,6 +53,14 @@ Before the first logfood rollout:
 - ✅ **T-209** Path traversal in SPA catch-all closed.
 - ✅ **T-207 / T-208** Per-user audit logging + Project DELETE ownership gating live.
 - ✅ **T-210** Runtime/dev deps split + hash-pinned via `uv pip compile`.
-- 🔄 **T-205** OBO plumbing — `current_user_email()` dep is in place; chat router still needs `WorkspaceClient(token=user_token)` once Apps OBO is greenlit.
-- 🔄 **T-206** Pivot the data layer from SQLite/SQLAlchemy to UC Delta + DBSQL. Schema is in place (`main.field_strategist_cockpit.*`); cockpit code refactor is the remaining work.
+- ✅ **T-205 / F-TM-2** OBO plumbing — `current_user_token()` dep wired; chat router constructs `WorkspaceClient(host, token=user_token)` per request. `app.yaml` declares `user_authorization` scopes (`sql`, `serving.serving-endpoints`, `dashboards.genie`). Closed in commit c697186.
+- ✅ **T-206 / F-TM-1** Data layer pivot to UC + DBSQL behind `DATA_BACKEND=dbsql`. Reads from `v_engagements_unified` filtered by `strategist_email`; writes stamp it. SQLite path retained for dev/pytest. Closed in commit 4a3d06d.
+- ✅ **T-201 / T-202** Lakeview dashboard at `/impact`, Genie space at `/ask`. Driven by `LAKEVIEW_DASHBOARD_ID` and `GENIE_SPACE_ID` env vars; both fall back to a "View in Databricks" card when not configured. Closed in commit cee2117.
 - ⏳ **T-211** Lakebase migration — deferred until Lakebase is available on Central Logfood.
+
+### One-time manual steps for the first prod deploy
+
+1. **Run the UC DDL.** Execute `scripts/init_uc_tables.sql` against the workspace warehouse so `engagements_manual`, `engagement_app_data`, `projects`, and `app_audit_log` exist before the app boots. The app does **not** auto-create these — ops owns the DDL so the App SP doesn't need CREATE-TABLE privileges.
+2. **Allowlist the App for embed.** Workspace admin → Settings → **Security & Compliance** → **External access** → **Embed dashboards**, add the App's host (e.g. `<app-name>-<workspace-id>.<region>.databricksapps.com`). Without this, the `/impact` and `/ask` iframes will be blocked by the workspace embed policy.
+3. **Set `CSP_FRAME_SRC`.** Add the workspace host (e.g. `adb-2548836972759138.18.azuredatabricks.net`) so the app's own CSP allows the iframe sources. Without it, the iframes are blocked by `frame-src 'none'`.
+4. **(If the YAML scopes are not honored)** Open the App in the Databricks UI and add the OBO scopes manually under **User authorization → +Add scope**: `sql`, `serving.serving-endpoints`, `dashboards.genie`. Recent versions of the Apps platform read these from `app.yaml`; older versions only support the UI.

@@ -4,6 +4,49 @@
 >
 > Way of working (same as CLAUDE.md): **Investigate → Plan incl. test design → Implement → Thoroughly test → Iterate.** Focus on operational efficiency, security, and coding best practices.
 
+## Done (2026-05-04 P2 closure sweep)
+
+Closed in three commits on `main`:
+
+- **T-205 / F-TM-2 (P2, High)** OBO routing for Stratego chat. New
+  `current_user_token()` FastAPI dep reads `X-Forwarded-Access-Token`,
+  falls back to `DATABRICKS_TOKEN` in dev with a one-shot warning, 401s
+  under `STRICT_AUTH=1`. `chat.py` constructs `WorkspaceClient(host,
+  token=user_token)` per request. `app.yaml` now declares
+  `user_authorization` scopes (`sql`, `serving.serving-endpoints`,
+  `dashboards.genie`) and sets `STRICT_AUTH=1` in prod. New tests cover
+  header forwarding, dev fallback, strict 401, and a full chat OBO
+  round-trip with the SDK mocked. Commit c697186.
+
+- **T-206 / F-TM-1 (P2, High)** Data layer pivot to UC + DBSQL behind
+  `DATA_BACKEND=sqlite|dbsql`. New `src/backend/dbsql.py` (databricks-sql
+  context-managed cursor + `fetch_all/fetch_one/execute` helpers, always
+  parameterised). New `src/backend/repos/{engagements,projects}_repo.py`
+  with read filters on `strategist_email` (F-TM-1) and writes that stamp
+  the email from `current_user_email()` — caller-supplied identity beats
+  payload identity (test asserts spoofing loses). Routers dispatch on the
+  flag; SQLite path unchanged so dev/pytest stay fast. Ops-owned DDL in
+  `scripts/init_uc_tables.sql`. 14 new tests for SQL/params shape +
+  HTTP-level dispatch. Commit 4a3d06d.
+
+- **T-201 + T-202 (P2)** Lakeview dashboard at `/impact`, Genie space at
+  `/ask`. New `/api/config` endpoint exposes `databricks_host`,
+  `lakeview_dashboard_id`, `genie_space_id`, `data_backend`. New
+  `Impact.tsx` and `Ask.tsx` build iframe URLs `/embed/dashboardsv3/<id>`
+  and `/embed/genie/<id>` — fallback cards + "Open in Databricks"
+  deep-link. Nav extended to 6 entries; Home tile grid grows. CSP test
+  confirms workspace host opt-in via `CSP_FRAME_SRC`. Commit cee2117.
+
+- **T-203 (P2)** Docs sync — `architecture.md`, `deployment.md`,
+  `development.md`, `api-reference.md` updated to reflect closed items
+  (DBSQL backend, OBO, embeds, env var matrix, project tree). New
+  `docs/lessons-learned.md` captures design choices + gotchas (Genie
+  Beta URL, embed allowlisting, DBSQL paramstyle, IDENTITY round-trip).
+
+**Not closed in this sweep:**
+- **T-211** Lakebase migration — still blocked on Autoscaling GA in Central
+  Logfood. Goal end-state for app-managed state once it lands.
+
 ## Done (2026-04-29 SDR-4682 closure sweep — Tracks A + C)
 
 Landed across multiple commits to close SDR-4682 high-leverage findings:

@@ -11,8 +11,6 @@ inject ``X-Forwarded-Access-Token`` to exercise the prod path and use
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.backend.routers.chat import OFFLINE_RESPONSE
 
 
