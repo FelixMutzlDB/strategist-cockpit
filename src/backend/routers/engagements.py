@@ -2,12 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.backend.audit import record_event
-from src.backend.auth import current_user_email
+from src.backend.auth import current_user_email, current_user_token
+from src.backend.config import settings
 from src.backend.database import get_db
 from src.backend.models import Engagement
+from src.backend.repos import engagements_repo
 from src.backend.schemas import EngagementCreate, EngagementOut, EngagementUpdate
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])
+
+
+def _use_dbsql() -> bool:
+    return settings.data_backend == "dbsql"
 
 
 @router.get("/", response_model=list[EngagementOut])
@@ -17,7 +23,22 @@ def list_engagements(
     status: str | None = Query(None, description="Filter by status: Completed, Ongoing, etc."),
     customer: str | None = Query(None, description="Filter by customer name (partial match)"),
     db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
 ):
+    if _use_dbsql():
+        rows = engagements_repo.list_engagements(
+            user_token=user_token,
+            strategist_email=user_email,
+            filters={
+                "fy": fy,
+                "engagement_type": engagement_type,
+                "status": status,
+                "customer": customer,
+            },
+        )
+        return [EngagementOut.model_validate(r) for r in rows]
+
     query = db.query(Engagement)
     if fy:
         query = query.filter(Engagement.fy == fy)
@@ -31,7 +52,22 @@ def list_engagements(
 
 
 @router.get("/{engagement_id}", response_model=EngagementOut)
-def get_engagement(engagement_id: int, db: Session = Depends(get_db)):
+def get_engagement(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
+):
+    if _use_dbsql():
+        row = engagements_repo.get_engagement(
+            user_token=user_token,
+            strategist_email=user_email,
+            engagement_id=engagement_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+        return EngagementOut.model_validate(row)
+
     eng = db.query(Engagement).filter(Engagement.id == engagement_id).first()
     if not eng:
         raise HTTPException(status_code=404, detail="Engagement not found")
@@ -43,7 +79,22 @@ def create_engagement(
     engagement: EngagementCreate,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
 ):
+    if _use_dbsql():
+        row = engagements_repo.create_engagement(
+            user_token=user_token,
+            strategist_email=user_email,
+            payload=engagement.model_dump(),
+        )
+        record_event(
+            user_email=user_email,
+            action="create",
+            target_type="engagement",
+            target_id=row["id"],
+        )
+        return EngagementOut.model_validate(row)
+
     db_engagement = Engagement(**engagement.model_dump())
     db.add(db_engagement)
     db.commit()
@@ -63,7 +114,26 @@ def update_engagement(
     engagement: EngagementUpdate,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
 ):
+    if _use_dbsql():
+        update_data = engagement.model_dump(exclude_unset=True)
+        row = engagements_repo.update_engagement(
+            user_token=user_token,
+            strategist_email=user_email,
+            engagement_id=engagement_id,
+            payload=update_data,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+        record_event(
+            user_email=user_email,
+            action="update",
+            target_type="engagement",
+            target_id=engagement_id,
+        )
+        return EngagementOut.model_validate(row)
+
     db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
     if not db_engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
@@ -86,7 +156,29 @@ def delete_engagement(
     engagement_id: int,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
 ):
+    if _use_dbsql():
+        existing = engagements_repo.get_engagement(
+            user_token=user_token,
+            strategist_email=user_email,
+            engagement_id=engagement_id,
+        )
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+        engagements_repo.delete_engagement(
+            user_token=user_token,
+            strategist_email=user_email,
+            engagement_id=engagement_id,
+        )
+        record_event(
+            user_email=user_email,
+            action="delete",
+            target_type="engagement",
+            target_id=engagement_id,
+        )
+        return
+
     db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
     if not db_engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
