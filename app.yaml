@@ -13,3 +13,31 @@ env:
     value: "071969b1ec9a91ca"
   - name: STRATEGO_ENDPOINT_NAME
     valueFrom: STRATEGO_ENDPOINT_NAME
+  # OBO is mandatory in prod — without STRICT_AUTH=1 the app would fall back
+  # to a local dev identity and dev DATABRICKS_TOKEN, defeating per-user authz.
+  - name: STRICT_AUTH
+    value: "1"
+  - name: DATA_BACKEND
+    value: "dbsql"
+  - name: LAKEVIEW_DASHBOARD_ID
+    valueFrom: LAKEVIEW_DASHBOARD_ID
+  - name: GENIE_SPACE_ID
+    valueFrom: GENIE_SPACE_ID
+  # CSP allow-list for the Lakeview dashboard / Genie Space iframes; set this
+  # to the workspace host (e.g. adb-2548836972759138.18.azuredatabricks.net).
+  - name: CSP_FRAME_SRC
+    valueFrom: CSP_FRAME_SRC
+  - name: CSP_CONNECT_SRC
+    valueFrom: CSP_CONNECT_SRC
+
+# User-authorization (OBO) scopes — see docs/architecture.md "Security".
+# If your Databricks Apps version doesn't honor user_authorization in app.yaml,
+# set the same scopes via the Apps UI: Edit app → User authorization → +Add scope.
+user_authorization:
+  scopes:
+    # SQL warehouse access for engagements/projects reads + writes (T-206).
+    - sql
+    # Serving endpoint access for the Stratego Knowledge Assistant (T-205).
+    - serving.serving-endpoints
+    # Genie space conversations (T-202).
+    - dashboards.genie

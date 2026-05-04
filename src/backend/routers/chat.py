@@ -5,6 +5,11 @@ when STRATEGO_ENDPOINT_NAME is set. When not configured (local dev without
 credentials), returns a single short offline message — we intentionally don't
 try to be clever offline. The Stratego "knowledge" lives in the KA endpoint's
 attached context, not in this file.
+
+Auth model (T-205 / F-TM-2): the WorkspaceClient is constructed per-request
+with the user's OBO token (``X-Forwarded-Access-Token``), so the KA call is
+authorized as the strategist, not the app service principal. ``app.yaml``
+must declare the ``serving.serving-endpoints`` user-authorization scope.
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.backend.audit import record_event
-from src.backend.auth import current_user_email
+from src.backend.auth import current_user_email, current_user_token
 from src.backend.config import settings
 from src.backend.schemas import ChatMessage, ChatResponse
 
@@ -27,9 +32,13 @@ OFFLINE_RESPONSE = (
 )
 
 
-def _query_stratego(message: str) -> str:
-    """Query the Stratego Knowledge Assistant endpoint. Return the offline
-    response if the endpoint is not configured or the call fails."""
+def _query_stratego(message: str, user_token: str) -> str:
+    """Query the Stratego Knowledge Assistant endpoint as the calling user.
+
+    Returns the offline response if the endpoint is not configured or the
+    call fails. ``user_token`` is the OBO token from
+    ``current_user_token()`` — never the app SP.
+    """
     endpoint_name = settings.stratego_endpoint_name
     if not endpoint_name:
         return OFFLINE_RESPONSE
@@ -37,7 +46,7 @@ def _query_stratego(message: str) -> str:
     try:
         from databricks.sdk import WorkspaceClient  # imported lazily — dev-only SDK dep
 
-        client = WorkspaceClient()
+        client = WorkspaceClient(host=settings.databricks_host or None, token=user_token)
         response = client.serving_endpoints.query(
             name=endpoint_name,
             messages=[{"role": "user", "content": message}],
@@ -58,10 +67,11 @@ def _query_stratego(message: str) -> str:
 async def chat(
     message: ChatMessage,
     user_email: str = Depends(current_user_email),
+    user_token: str = Depends(current_user_token),
 ) -> ChatResponse:
     prompt_length = len(message.message)
     try:
-        text = _query_stratego(message.message)
+        text = _query_stratego(message.message, user_token)
     except Exception as exc:  # noqa: BLE001 — defence-in-depth; inner handler already catches
         logger.error("Chat error: %s", exc)
         record_event(

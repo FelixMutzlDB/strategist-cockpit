@@ -9,6 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite:///test_strategist.db"
+# Provide a benign dev fallback so current_user_token() doesn't 401 in tests
+# that don't explicitly inject X-Forwarded-Access-Token. Tests that exercise
+# strict-auth/401 paths use monkeypatch.setenv("STRICT_AUTH", "1") + delenv
+# to override.
+os.environ.setdefault("DATABRICKS_TOKEN", "test-fallback-token")
 
 # Ensure a minimal static/ directory exists at the path main.py expects so the
 # SPA mount is registered when tests import the app. CI's frontend job builds
