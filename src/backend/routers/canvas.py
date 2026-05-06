@@ -5,6 +5,11 @@ across the Thought Leadership / Evangelism sections of the canvas (e.g. "Events"
 so each position has its own slug (`events-customer`, `events-evangelism`, ...).
 Keyword maps for the duplicate positions intentionally point at the same keyword
 set for now; they can diverge later if the UX calls for position-specific views.
+
+SDR-4682 N-6: this surface returned full engagement detail for *all*
+strategists' rows. Now scoped to the calling strategist via the same
+``strategist_email`` filter as ``/api/engagements`` so tenancy is uniform
+across surfaces.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from src.backend.auth import current_user_email
 from src.backend.database import get_db
 from src.backend.models import Engagement
 from src.backend.schemas import CanvasSummary, EngagementOut
@@ -73,9 +79,20 @@ def _match_engagement(engagement: Engagement, keywords: list[str]) -> bool:
 
 
 @router.get("/summary/{activity}", response_model=CanvasSummary)
-def get_canvas_summary(activity: str, db: Session = Depends(get_db)):
+def get_canvas_summary(
+    activity: str,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(current_user_email),
+):
     keywords = CANVAS_ACTIVITY_KEYWORDS.get(activity, [])
-    all_engagements = db.query(Engagement).all()
+    # Tenant filter mirrors /api/engagements (F-TM-1 / N-6). Without this an
+    # attacker could read any strategist's engagement details by guessing
+    # canvas keywords (vision/CIO/RFP/...).
+    all_engagements = (
+        db.query(Engagement)
+        .filter(Engagement.strategist_email == user_email)
+        .all()
+    )
 
     matched = [e for e in all_engagements if _match_engagement(e, keywords)] if keywords else []
 

@@ -39,7 +39,9 @@ def list_engagements(
         )
         return [EngagementOut.model_validate(r) for r in rows]
 
-    query = db.query(Engagement)
+    # F-TM-1 SQLite path: tenant filter must be the FIRST clause so any
+    # accidental future predicate change can't loosen scoping.
+    query = db.query(Engagement).filter(Engagement.strategist_email == user_email)
     if fy:
         query = query.filter(Engagement.fy == fy)
     if engagement_type:
@@ -68,7 +70,14 @@ def get_engagement(
             raise HTTPException(status_code=404, detail="Engagement not found")
         return EngagementOut.model_validate(row)
 
-    eng = db.query(Engagement).filter(Engagement.id == engagement_id).first()
+    eng = (
+        db.query(Engagement)
+        .filter(
+            Engagement.id == engagement_id,
+            Engagement.strategist_email == user_email,
+        )
+        .first()
+    )
     if not eng:
         raise HTTPException(status_code=404, detail="Engagement not found")
     return eng
@@ -95,7 +104,11 @@ def create_engagement(
         )
         return EngagementOut.model_validate(row)
 
-    db_engagement = Engagement(**engagement.model_dump())
+    # Tenant key is stamped from the auth dep, never the payload (F-TM-1).
+    db_engagement = Engagement(
+        **engagement.model_dump(),
+        strategist_email=user_email,
+    )
     db.add(db_engagement)
     db.commit()
     db.refresh(db_engagement)
@@ -134,10 +147,19 @@ def update_engagement(
         )
         return EngagementOut.model_validate(row)
 
-    db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
+    db_engagement = (
+        db.query(Engagement)
+        .filter(
+            Engagement.id == engagement_id,
+            Engagement.strategist_email == user_email,
+        )
+        .first()
+    )
     if not db_engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
     update_data = engagement.model_dump(exclude_unset=True)
+    # Defence-in-depth: never let an Update payload re-stamp the tenant.
+    update_data.pop("strategist_email", None)
     for key, value in update_data.items():
         setattr(db_engagement, key, value)
     db.commit()
@@ -179,7 +201,14 @@ def delete_engagement(
         )
         return
 
-    db_engagement = db.query(Engagement).filter(Engagement.id == engagement_id).first()
+    db_engagement = (
+        db.query(Engagement)
+        .filter(
+            Engagement.id == engagement_id,
+            Engagement.strategist_email == user_email,
+        )
+        .first()
+    )
     if not db_engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
     db.delete(db_engagement)

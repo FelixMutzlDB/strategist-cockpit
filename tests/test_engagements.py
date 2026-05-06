@@ -183,3 +183,124 @@ def test_engagement_accepts_uco_ids(client):
     fetched = client.get(f"/api/engagements/{eng_id}").json()
     assert fetched["uco_ids"] == "UCO-1234, UCO-5678"
     client.delete(f"/api/engagements/{eng_id}")
+
+
+# --- F-TM-1 / SDR-4682 tenancy on the SQLite path ----------------------------
+
+
+def test_engagement_create_stamps_strategist_email(client):
+    """The router must stamp strategist_email from current_user_email — never
+    trust a payload field. Default test identity is dev@local."""
+    resp = client.post(
+        "/api/engagements/",
+        json={
+            "customer": "Spoof Test",
+            # Try to spoof — must be ignored.
+            "strategist_email": "evil@elsewhere.com",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["strategist_email"] == "dev@local"
+    client.delete(f"/api/engagements/{body['id']}")
+
+
+def test_engagement_list_filters_by_strategist_email(client, db_session):
+    """A row owned by another strategist must not appear in the caller's list."""
+    from src.backend.models import Engagement
+
+    # Insert a row owned by someone else, then list as default test user.
+    other = Engagement(
+        customer="Other Strategist Corp",
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add(other)
+    db_session.commit()
+
+    resp = client.get("/api/engagements/")
+    customers = [e["customer"] for e in resp.json()]
+    assert "Other Strategist Corp" not in customers
+
+    db_session.delete(other)
+    db_session.commit()
+
+
+def test_engagement_get_returns_404_for_other_tenant(client, db_session):
+    from src.backend.models import Engagement
+
+    other = Engagement(
+        customer="Their Corp",
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add(other)
+    db_session.commit()
+    other_id = other.id
+
+    resp = client.get(f"/api/engagements/{other_id}")
+    assert resp.status_code == 404
+
+    db_session.delete(other)
+    db_session.commit()
+
+
+def test_engagement_update_blocks_other_tenant(client, db_session):
+    """Update of another tenant's row must return 404 (not leak existence)."""
+    from src.backend.models import Engagement
+
+    other = Engagement(
+        customer="Their Corp",
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add(other)
+    db_session.commit()
+    other_id = other.id
+
+    resp = client.put(
+        f"/api/engagements/{other_id}",
+        json={"status": "Completed"},
+    )
+    assert resp.status_code == 404
+
+    db_session.delete(other)
+    db_session.commit()
+
+
+def test_engagement_delete_blocks_other_tenant(client, db_session):
+    from src.backend.models import Engagement
+
+    other = Engagement(
+        customer="Their Corp",
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add(other)
+    db_session.commit()
+    other_id = other.id
+
+    resp = client.delete(f"/api/engagements/{other_id}")
+    assert resp.status_code == 404
+
+    # Row still exists.
+    still_there = (
+        db_session.query(Engagement).filter(Engagement.id == other_id).first()
+    )
+    assert still_there is not None
+
+    db_session.delete(other)
+    db_session.commit()
+
+
+def test_engagement_update_does_not_let_payload_change_strategist_email(client, db_session):
+    """Even on a row I own, my Update payload cannot re-stamp the tenant key."""
+    from src.backend.models import Engagement
+
+    create = client.post("/api/engagements/", json={"customer": "Mine Corp"})
+    eng_id = create.json()["id"]
+
+    resp = client.put(
+        f"/api/engagements/{eng_id}",
+        json={"strategist_email": "evil@elsewhere.com", "status": "Ongoing"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["strategist_email"] == "dev@local"
+
+    client.delete(f"/api/engagements/{eng_id}")

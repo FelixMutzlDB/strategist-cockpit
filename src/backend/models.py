@@ -22,6 +22,9 @@ class Engagement(Base):
     next_steps = Column(Text)
     # Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
     uco_ids = Column(String(500))
+    # Tenant key (F-TM-1 / SDR-4682 N-6). Stamped from `current_user_email()`
+    # on every write. Every read filters by it. Same shape as `Project.created_by_email`.
+    strategist_email = Column(String(255), index=True)
 
 
 class Project(Base):

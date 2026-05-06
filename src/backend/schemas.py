@@ -70,6 +70,9 @@ class EngagementUpdate(EngagementBase):
 class EngagementOut(EngagementBase):
     model_config = {"from_attributes": True, "str_strip_whitespace": True}
     id: int
+    # Read-only tenant key. Never settable via Create/Update — the router
+    # stamps it from `current_user_email()` so a client cannot spoof the owner.
+    strategist_email: str | None = None
 
 
 # --- Project Schemas ---

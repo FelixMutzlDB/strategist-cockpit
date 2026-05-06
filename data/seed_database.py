@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import sys
 from pathlib import Path
@@ -76,6 +77,15 @@ def seed_engagements(force: bool = False) -> int:
                         quarter=normalize_quarter((row.get("Quarter") or "").strip() or None),
                         related_documents=(row.get("Related documents") or "").strip() or None,
                         next_steps=(row.get("Next Steps") or "").strip() or None,
+                        # F-TM-1: stamp tenant on seeded rows so the local-dev
+                        # strategist sees their data through the tenant filter.
+                        # Override via SEED_STRATEGIST_EMAIL for multi-strategist
+                        # seed datasets.
+                        strategist_email=(
+                            os.environ.get("SEED_STRATEGIST_EMAIL", "felix.mutzl@databricks.com")
+                            .strip()
+                            .lower()
+                        ),
                     )
                 )
                 count += 1

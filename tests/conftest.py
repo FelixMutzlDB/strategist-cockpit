@@ -78,6 +78,9 @@ def sample_engagement(db_session) -> Engagement:
         quarter="FY26Q1",
         ae="Jane Doe",
         asq_id="ASQ-001",
+        # F-TM-1: stamp tenant so list/get/canvas endpoints find this row
+        # under the dev fallback identity used by tests.
+        strategist_email="dev@local",
     )
     db_session.add(eng)
     db_session.commit()

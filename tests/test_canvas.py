@@ -78,3 +78,62 @@ def test_canvas_deduped_slugs_match_canonical(client, slug, canonical):
     # Counts and account sets should match since they share keyword lists.
     assert a["engagement_count"] == b["engagement_count"]
     assert sorted(a["accounts"]) == sorted(b["accounts"])
+
+
+# --- SDR-4682 N-6: canvas summary tenancy ---
+
+
+def test_canvas_summary_does_not_leak_other_tenants(client, db_session):
+    """Another strategist's engagement matching the keywords must NOT appear
+    in this strategist's canvas summary — accounts list, count, and detail
+    rows all scoped to the caller's strategist_email."""
+    from src.backend.models import Engagement
+
+    other = Engagement(
+        customer="Other Strategist Corp",
+        engagement_title="CIO Vision and exec board session",  # matches c-level keywords
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add(other)
+    db_session.commit()
+
+    resp = client.get("/api/canvas/summary/c-level-vision-setting")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "Other Strategist Corp" not in data["accounts"]
+    assert all(
+        e["customer"] != "Other Strategist Corp"
+        for e in data["recent_engagements"]
+    )
+
+    db_session.delete(other)
+    db_session.commit()
+
+
+def test_canvas_summary_includes_only_callers_engagements(client, db_session):
+    """My own matching engagements DO appear; another tenant's don't —
+    same keywords, two strategists, only one row in the response."""
+    from src.backend.models import Engagement
+
+    mine = Engagement(
+        customer="My Corp",
+        engagement_title="CIO vision board",
+        strategist_email="dev@local",  # matches the test identity
+    )
+    other = Engagement(
+        customer="Their Corp",
+        engagement_title="CIO vision board",
+        strategist_email="other.strategist@databricks.com",
+    )
+    db_session.add_all([mine, other])
+    db_session.commit()
+
+    resp = client.get("/api/canvas/summary/c-level-vision-setting")
+    data = resp.json()
+    customers = data["accounts"]
+    assert "My Corp" in customers
+    assert "Their Corp" not in customers
+
+    db_session.delete(mine)
+    db_session.delete(other)
+    db_session.commit()
