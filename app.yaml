@@ -23,12 +23,14 @@ env:
     valueFrom: LAKEVIEW_DASHBOARD_ID
   - name: GENIE_SPACE_ID
     valueFrom: GENIE_SPACE_ID
-  # CSP allow-list for the Lakeview dashboard / Genie Space iframes; set this
-  # to the workspace host (e.g. adb-2548836972759138.18.azuredatabricks.net).
+  # CSP allow-list for the Lakeview dashboard / Genie Space iframes.
+  # Default to the field-eng workspace host so the deploy doesn't need a
+  # separate workspace secret. Override with `valueFrom: CSP_FRAME_SRC`
+  # if deploying to a different workspace.
   - name: CSP_FRAME_SRC
-    valueFrom: CSP_FRAME_SRC
+    value: "adb-2548836972759138.18.azuredatabricks.net"
   - name: CSP_CONNECT_SRC
-    valueFrom: CSP_CONNECT_SRC
+    value: "adb-2548836972759138.18.azuredatabricks.net"
 
 # User-authorization (OBO) scopes — see docs/architecture.md "Security".
 # If your Databricks Apps version doesn't honor user_authorization in app.yaml,
