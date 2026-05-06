@@ -12,7 +12,7 @@
 > body itself.
 
 SDR doc: https://docs.google.com/document/d/1aTX4HNwNxyYvb_RXj_hBO2Wh_2LufryZauNOroaCdRg/edit
-Repo: https://github.com/FelixMutzlDB/strategist-cockpit (main)
+Repo: https://github.com/felix-mutzl_data/strategist-cockpit (main)
 Last commit at time of writing: `c760d62`
 
 ---

@@ -10,7 +10,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/FelixMutzlDB/strategist-cockpit.git
+git clone https://github.com/felix-mutzl_data/strategist-cockpit.git
 cd strategist-cockpit
 
 # Python environment

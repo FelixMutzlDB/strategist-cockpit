@@ -2,7 +2,7 @@
 
 > Last updated: 2026-04-23
 > Owner: Felix Mutzl (felix.mutzl@databricks.com), Data & AI Strategist, DACH
-> Remote: https://github.com/FelixMutzlDB/strategist-cockpit (main only; still on initial commit)
+> Remote: https://github.com/felix-mutzl_data/strategist-cockpit (main; under Felix's EMU account — moved 2026-05-04 from FelixMutzlDB)
 > Target workspace: `adb-2548836972759138.18.azuredatabricks.net` (field-eng)
 > Target Databricks App: `strategist-cockpit` (serves SPA from `static/` via FastAPI)
 
@@ -18,7 +18,7 @@ Source of truth for intent: [Vibing Dev Scribble → Strategist Cockpit tab](htt
 - AI/BI Dashboard: built via `scripts/build_dashboard.py` (5 pages: Executive / Focus / One-off / Impact / Filters) — lives in Databricks, **not yet embedded in the app**.
 - Genie Space: "Strategist Cockpit Genie" exists in workspace — **not yet embedded in the app**.
 - Tests: `tests/` has unit tests for engagements, projects, canvas, chat, health + integration tests for SQL warehouse / KA endpoint / dashboard / Genie (skipped without creds).
-- Git: active `main` branch on `github.com/FelixMutzlDB/strategist-cockpit` with Dependabot enabled. Major commits in logical chunks, not one megacommit.
+- Git: active `main` branch on `github.com/felix-mutzl_data/strategist-cockpit` with Dependabot enabled. Major commits in logical chunks, not one megacommit.
 - Built by Cursor originally; we're shifting ownership to Claude Code.
 
 ## Read order
