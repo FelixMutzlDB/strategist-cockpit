@@ -66,6 +66,10 @@ USING DELTA;
 
 -- Audit log: structured events from src/backend/audit.py. Today the app
 -- emits stdout JSON; a follow-up will write rows directly via dbsql.
+-- Volume is low (single-digit RPS at most) so we don't partition. If we
+-- ever need it, add `event_date DATE GENERATED ALWAYS AS (CAST(ts AS DATE))`
+-- and partition by that — Delta requires generated columns for date-from-ts
+-- partitioning, not raw expressions.
 CREATE TABLE IF NOT EXISTS app_audit_log (
   ts              TIMESTAMP NOT NULL,
   user_email      STRING NOT NULL,
@@ -75,5 +79,4 @@ CREATE TABLE IF NOT EXISTS app_audit_log (
   result          STRING NOT NULL,
   extra           STRING                 -- JSON payload
 )
-USING DELTA
-PARTITIONED BY (DATE(ts));
+USING DELTA;
