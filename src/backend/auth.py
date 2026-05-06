@@ -95,6 +95,27 @@ def current_user_token(
     )
 
 
+def current_user_token_or_empty(
+    x_forwarded_access_token: str | None = Header(
+        default=None, alias="X-Forwarded-Access-Token"
+    ),
+) -> str:
+    """FastAPI dependency: return the user's OBO access token, or empty string if unavailable.
+
+    Used for SQLite dev mode where a token is not strictly required.
+    Production (``STRICT_AUTH=1``): missing header → 401.
+    Dev: missing header → returns empty string (no warning).
+    """
+    if x_forwarded_access_token:
+        return x_forwarded_access_token
+    if _strict_auth_enabled():
+        raise HTTPException(
+            status_code=401, detail="Missing X-Forwarded-Access-Token"
+        )
+    fallback = os.environ.get("DATABRICKS_TOKEN", "").strip()
+    return fallback
+
+
 def is_admin(email: str) -> bool:
     """True if ``email`` is in the configured admin list (CAN_MANAGE)."""
     return email.strip().lower() in _admin_emails()

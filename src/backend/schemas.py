@@ -48,8 +48,8 @@ class EngagementBase(BaseModel):
     timeframe: str | None = Field(default=None, max_length=255)
     fy: str | None = Field(default=None, pattern=_FY_PATTERN)
     quarter: str | None = Field(default=None, max_length=100)
-    related_documents: str | None = Field(default=None, max_length=4000)
-    next_steps: str | None = Field(default=None, max_length=4000)
+    related_documents: str | None = Field(default=None, max_length=10000)
+    next_steps: str | None = Field(default=None, max_length=10000)
     # Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
     uco_ids: str | None = Field(default=None, max_length=500)
 

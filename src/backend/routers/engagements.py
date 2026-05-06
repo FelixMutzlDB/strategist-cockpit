@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.backend.audit import record_event
-from src.backend.auth import current_user_email, current_user_token
+from src.backend.auth import current_user_email, current_user_token_or_empty
 from src.backend.config import settings
 from src.backend.database import get_db
 from src.backend.models import Engagement
@@ -24,7 +24,7 @@ def list_engagements(
     customer: str | None = Query(None, description="Filter by customer name (partial match)"),
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token),
+    user_token: str = Depends(current_user_token_or_empty),
 ):
     if _use_dbsql():
         rows = engagements_repo.list_engagements(
@@ -56,7 +56,7 @@ def get_engagement(
     engagement_id: int,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token),
+    user_token: str = Depends(current_user_token_or_empty),
 ):
     if _use_dbsql():
         row = engagements_repo.get_engagement(
@@ -79,7 +79,7 @@ def create_engagement(
     engagement: EngagementCreate,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token),
+    user_token: str = Depends(current_user_token_or_empty),
 ):
     if _use_dbsql():
         row = engagements_repo.create_engagement(
@@ -114,7 +114,7 @@ def update_engagement(
     engagement: EngagementUpdate,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token),
+    user_token: str = Depends(current_user_token_or_empty),
 ):
     if _use_dbsql():
         update_data = engagement.model_dump(exclude_unset=True)
@@ -156,7 +156,7 @@ def delete_engagement(
     engagement_id: int,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token),
+    user_token: str = Depends(current_user_token_or_empty),
 ):
     if _use_dbsql():
         existing = engagements_repo.get_engagement(
