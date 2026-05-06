@@ -115,3 +115,26 @@ on `npm run build` + manual click-through after deploy.
 low-RPS, single-user. If the warehouse has a transient hiccup we 500;
 the user retries. Building a Tenacity-style retry wrapper would be
 premature.
+
+### Bug caught by the post-merge smoke test (commit c760d62)
+
+Adding `current_user_token` as a `Depends` on engagement / project / chat
+routes broke local dev: starting `uvicorn` from a fresh shell without
+`DATABRICKS_TOKEN` set caused every CRUD call to **401**. The pytest suite
+masked the bug because `tests/conftest.py` sets a benign
+`DATABRICKS_TOKEN` for the test session — pytest-only env defaults are
+silent in real local dev.
+
+**Fix shipped:** new `current_user_token_or_empty()` returns `""` in dev
+when no header and no `DATABRICKS_TOKEN` are present (still 401s under
+`STRICT_AUTH=1`). Routers now use the lenient version.
+
+**Lesson:** when adding a `Depends` that has prod-strict semantics, run
+the dev server in a clean shell (`env -i bash`) before declaring the
+feature done. Pytest fixtures are not a substitute for actually starting
+the app the way a developer would.
+
+**Follow-up tracked in backlog as T-220.** The strict
+`current_user_token()` is now dead code in routes — only its own tests
+keep it alive. Consolidating the two functions into one (lenient by
+default, strict via STRICT_AUTH) is on the backlog.

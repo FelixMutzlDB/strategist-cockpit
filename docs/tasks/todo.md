@@ -47,6 +47,31 @@ Closed in three commits on `main`:
 - **T-211** Lakebase migration — still blocked on Autoscaling GA in Central
   Logfood. Goal end-state for app-managed state once it lands.
 
+## P1 — Code quality / "make it ours" (open)
+
+### T-220 Consolidate `current_user_token` and `current_user_token_or_empty`
+
+- **Problem.** Commit c760d62 (post-merge smoke-test fix) added a lenient
+  `current_user_token_or_empty()` so SQLite dev mode wouldn't 401 without
+  `DATABRICKS_TOKEN`. The strict `current_user_token()` is no longer used
+  anywhere in production code paths — only by its own tests. That's dead
+  code per CLAUDE.md.
+- **Plan.** Collapse the two into a single `current_user_token()` that
+  - Returns the header value when present.
+  - 401s under `STRICT_AUTH=1` when missing.
+  - Falls back to `DATABRICKS_TOKEN` then `""` (no warning) in dev.
+  Drop `current_user_token_or_empty()` and its callers; rewire to
+  `current_user_token()`. Update `tests/test_auth.py` — drop the
+  `test_token_no_header_no_dev_token_returns_401` test case (the new
+  behavior returns `""` in dev). Verify no remaining grep for `_or_empty`.
+- **Test / acceptance.** Full pytest suite green; manual `env -i` shell
+  smoke test (uvicorn + curl) passes without `DATABRICKS_TOKEN` set;
+  prod path with `STRICT_AUTH=1` still 401s.
+- **Blast radius.** Three router files + `auth.py` + tests. Behaviour-
+  preserving for prod and for happy-path dev.
+
+---
+
 ## Done (2026-04-29 SDR-4682 closure sweep — Tracks A + C)
 
 Landed across multiple commits to close SDR-4682 high-leverage findings:
