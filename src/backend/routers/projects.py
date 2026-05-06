@@ -48,6 +48,7 @@ def create_project(
             action="create",
             target_type="project",
             target_id=row["id"],
+            user_token=user_token,
         )
         return ProjectOut.model_validate(row)
 
@@ -63,6 +64,7 @@ def create_project(
         action="create",
         target_type="project",
         target_id=db_project.id,
+        user_token=user_token,
     )
     return db_project
 
@@ -87,6 +89,7 @@ def delete_project(
                 target_type="project",
                 target_id=project_id,
                 result="forbidden_or_missing",
+                user_token=user_token,
             )
             raise HTTPException(status_code=404, detail="Project not found")
         record_event(
@@ -94,6 +97,7 @@ def delete_project(
             action="delete",
             target_type="project",
             target_id=project_id,
+            user_token=user_token,
         )
         return
 
@@ -110,6 +114,7 @@ def delete_project(
             target_type="project",
             target_id=project_id,
             result="forbidden",
+            user_token=user_token,
         )
         raise HTTPException(status_code=404, detail="Project not found")
     db.delete(project)
@@ -119,4 +124,5 @@ def delete_project(
         action="delete",
         target_type="project",
         target_id=project_id,
+        user_token=user_token,
     )

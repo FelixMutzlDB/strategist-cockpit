@@ -101,6 +101,7 @@ def create_engagement(
             action="create",
             target_type="engagement",
             target_id=row["id"],
+            user_token=user_token,
         )
         return EngagementOut.model_validate(row)
 
@@ -117,6 +118,7 @@ def create_engagement(
         action="create",
         target_type="engagement",
         target_id=db_engagement.id,
+        user_token=user_token,
     )
     return db_engagement
 
@@ -144,6 +146,7 @@ def update_engagement(
             action="update",
             target_type="engagement",
             target_id=engagement_id,
+            user_token=user_token,
         )
         return EngagementOut.model_validate(row)
 
@@ -169,6 +172,7 @@ def update_engagement(
         action="update",
         target_type="engagement",
         target_id=engagement_id,
+        user_token=user_token,
     )
     return db_engagement
 
@@ -198,6 +202,7 @@ def delete_engagement(
             action="delete",
             target_type="engagement",
             target_id=engagement_id,
+            user_token=user_token,
         )
         return
 
@@ -218,4 +223,5 @@ def delete_engagement(
         action="delete",
         target_type="engagement",
         target_id=engagement_id,
+        user_token=user_token,
     )

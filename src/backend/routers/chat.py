@@ -83,6 +83,7 @@ async def chat(
                 "prompt_length": prompt_length,
                 "error_class": type(exc).__name__,
             },
+            user_token=user_token,
         )
         raise HTTPException(
             status_code=500, detail="Failed to process chat message"
@@ -92,5 +93,6 @@ async def chat(
         action="chat",
         target_type="stratego_ka",
         extra={"prompt_length": prompt_length},
+        user_token=user_token,
     )
     return ChatResponse(response=text, source="stratego")
