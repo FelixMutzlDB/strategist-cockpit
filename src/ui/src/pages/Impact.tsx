@@ -76,8 +76,7 @@ export default function Impact() {
         <iframe
           src={dashboardUrl}
           title="Strategist Impact Dashboard"
-          className="w-full border-0"
-          style={{ height: "calc(100vh - 220px)", minHeight: "600px" }}
+          className="w-full border-0 h-[calc(100vh-220px)] min-h-[600px]"
         />
       </div>
     </div>
