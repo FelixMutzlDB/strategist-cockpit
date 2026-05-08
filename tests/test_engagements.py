@@ -291,7 +291,6 @@ def test_engagement_delete_blocks_other_tenant(client, db_session):
 
 def test_engagement_update_does_not_let_payload_change_strategist_email(client, db_session):
     """Even on a row I own, my Update payload cannot re-stamp the tenant key."""
-    from src.backend.models import Engagement
 
     create = client.post("/api/engagements/", json={"customer": "Mine Corp"})
     eng_id = create.json()["id"]

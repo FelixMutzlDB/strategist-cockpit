@@ -12,16 +12,18 @@
 
 Thanks for the round-3 re-review. **All six open findings are now closed** — two were already in `main` at your review time but missed by the snapshot diff, four are landed in this round. Walking each:
 
-## Process note: EMU repo visibility
+## Process note: EMU repo visibility — temporarily resolved via dual-push
 
 > *"EMU repo felix-mutzl_data/strategist-cockpit @ a66d55a not accessible from ProdSec gh auth, so reviewed against the equivalent public mirror commit"*
 
-Confirmed and important — the public mirror (`FelixMutzlDB/strategist-cockpit`) is **frozen at `ad4c93b`** (2026-05-04). All six round-2 closures and these four round-3 fixes live only at `felix-mutzl_data/strategist-cockpit`, which your gh auth can't reach. Two ways to fix this so future reviews are accurate:
+Acknowledged and addressed for this round. The public mirror (`FelixMutzlDB/strategist-cockpit`) had drifted behind `a11a1b4` while we were pushing to the EMU home; **as of 2026-05-08 both repos are now at the same HEAD** (currently `7c09c41`) and we're pushing to both manually until ProdSec and we settle on a canonical home.
 
-1. **Cleanest:** add ProdSec or your reviewer service-account as a read collaborator on `felix-mutzl_data/strategist-cockpit` — happy to do this if you tell me which GitHub login to invite.
-2. **Mirror:** I can keep `FelixMutzlDB/strategist-cockpit` as a one-way mirror of `main` and force-push from a CI job. Less ideal because of cred management; tell me if this is preferred over (1).
+Two long-term options on the table — please advise which you'd prefer:
 
-In the meantime, every finding below cites the commit hash so you can spot-check at https://github.com/felix-mutzl_data/strategist-cockpit/commit/<hash> if access lands.
+1. **Add reviewer access to the EMU repo.** Cleanest. If you can share the GitHub login for the ProdSec reviewer service / your account on the EMU side, I'll grant read access on `felix-mutzl_data/strategist-cockpit` and we drop the public mirror.
+2. **Keep `FelixMutzlDB/strategist-cockpit` as the canonical public mirror.** If your tooling depends on public-GitHub-side access (security-context-store sibling repo, CI hooks, etc.), I can keep the mirror live and just commit there as origin.
+
+Either way, every finding below cites the commit hash so you can spot-check at the same hash on either repo (https://github.com/felix-mutzl_data/strategist-cockpit/commit/<hash> *or* https://github.com/FelixMutzlDB/strategist-cockpit/commit/<hash>).
 
 ## Findings already closed at the time of your snapshot (your reviewer didn't see them)
 
