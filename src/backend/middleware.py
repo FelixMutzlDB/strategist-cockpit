@@ -33,9 +33,16 @@ def _build_csp() -> str:
         [
             "default-src 'self'",
             "script-src 'self'",
-            # Tailwind emits inline style attributes at runtime; allow 'unsafe-inline'
-            # for styles only. Scripts remain locked down.
-            "style-src 'self' 'unsafe-inline'",
+            # SDR-4682 N-9: split style-src into block-level (strict) and
+            # attribute-level (lenient). Tailwind compiles to a static stylesheet
+            # at build time, so no <style> blocks are emitted at runtime; only
+            # React's `style={...}` attribute on individual elements (e.g. the
+            # dynamic engagement-quarter chart-bar widths) needs unsafe-inline,
+            # and only at the attribute level. style-src-attr is a CSP3
+            # directive — older browsers fall back to style-src and block both,
+            # which is acceptable for an internal app on managed endpoints.
+            "style-src 'self'",
+            "style-src-attr 'unsafe-inline'",
             "img-src 'self' data:",
             f"connect-src {connect_src}",
             f"frame-src {frame_src}",
@@ -43,14 +50,20 @@ def _build_csp() -> str:
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",
-            "frame-ancestors 'self'",
+            # SDR-4682 N-8: cockpit is never legitimately framed by anyone —
+            # not even from the same origin. 'none' / DENY is the correct
+            # posture; allowlist-by-env is intentionally absent so a future
+            # operator can't loosen this without a code change.
+            "frame-ancestors 'none'",
         ]
     )
 
 
 SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "SAMEORIGIN",
+    # SDR-4682 N-8: see frame-ancestors comment above. DENY is stricter than
+    # SAMEORIGIN and matches the CSP intent.
+    "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }

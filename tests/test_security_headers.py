@@ -17,7 +17,9 @@ def test_x_content_type_options(health_response):
 
 
 def test_x_frame_options(health_response):
-    assert health_response.headers.get("X-Frame-Options") == "SAMEORIGIN"
+    # SDR-4682 N-8: app is never legitimately framed → DENY (stricter than
+    # SAMEORIGIN). Pairs with `frame-ancestors 'none'` in the CSP below.
+    assert health_response.headers.get("X-Frame-Options") == "DENY"
 
 
 def test_referrer_policy(health_response):
@@ -40,7 +42,24 @@ def test_content_security_policy_present(health_response):
     assert "default-src 'self'" in csp
     assert "object-src 'none'" in csp
     assert "base-uri 'self'" in csp
-    assert "frame-ancestors 'self'" in csp
+    # SDR-4682 N-8: app is never legitimately framed.
+    assert "frame-ancestors 'none'" in csp
+
+
+def test_csp_style_src_no_unsafe_inline_at_block_level(health_response):
+    """SDR-4682 N-9: <style> blocks must not allow unsafe-inline. React's
+    inline style={...} on individual elements is allowed via the lenient
+    style-src-attr fallback only."""
+    csp = health_response.headers.get("Content-Security-Policy", "")
+    # The block-level directive lists 'self' but NOT 'unsafe-inline'.
+    # We assert the literal directive form to avoid false positives from
+    # later 'unsafe-inline' tokens in style-src-attr.
+    assert "style-src 'self';" in csp or "style-src 'self' " in csp.replace(";", ";  ")
+    # Make sure no `style-src 'self' 'unsafe-inline'` regression sneaks in:
+    bad = "style-src 'self' 'unsafe-inline'"
+    assert bad not in csp, f"Block-level style-src must drop unsafe-inline; saw: {csp}"
+    # And the attribute-level escape hatch IS present, scoped just to attrs.
+    assert "style-src-attr 'unsafe-inline'" in csp
 
 
 def test_csp_frame_src_locked_down_by_default(health_response):
