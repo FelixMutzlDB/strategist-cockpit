@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from src.backend.audit import record_event
-from src.backend.auth import current_user_email, current_user_token_or_empty, is_admin
+from src.backend.auth import current_user_email, current_user_token, is_admin
 from src.backend.config import settings
 from src.backend.database import get_db
 from src.backend.models import Project
@@ -20,7 +20,7 @@ def _use_dbsql() -> bool:
 def list_projects(
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token_or_empty),
+    user_token: str = Depends(current_user_token),
 ):
     if _use_dbsql():
         rows = projects_repo.list_projects(
@@ -35,7 +35,7 @@ def create_project(
     project: ProjectCreate,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token_or_empty),
+    user_token: str = Depends(current_user_token),
 ):
     if _use_dbsql():
         row = projects_repo.create_project(
@@ -74,7 +74,7 @@ def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token_or_empty),
+    user_token: str = Depends(current_user_token),
 ):
     if _use_dbsql():
         ok = projects_repo.delete_project(

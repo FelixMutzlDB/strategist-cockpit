@@ -47,28 +47,41 @@ Closed in three commits on `main`:
 - **T-211** Lakebase migration — still blocked on Autoscaling GA in Central
   Logfood. Goal end-state for app-managed state once it lands.
 
+## Done (2026-05-08 SDR-4682 round-3 closure sweep)
+
+Reviewer's round-3 re-review (comment 8478300) at HEAD `a11a1b4`. Their
+findings list missed two items already shipped (N-7, F-TM-4 durability)
+and surfaced four new ones; all four landed plus T-220 closed.
+
+- **N-7 (HIGH) canvas leak — already closed in commit `2ab2354`.** Reviewer
+  reviewed at `a11a1b4`, missed the canvas filter that landed in `2ab2354`.
+- **F-TM-4 audit Delta sink — already closed in commit `beb1d90`.** Same
+  reason — landed after the reviewer's snapshot.
+- **N-8 (MEDIUM) frame-ancestors / X-Frame-Options — closed.** Middleware
+  now stamps `frame-ancestors 'none'` + `X-Frame-Options: DENY`. App is
+  never legitimately framed; intentionally no env-var allow-list so a
+  future operator can't loosen this without a code change.
+- **N-9 (MEDIUM) style-src 'unsafe-inline' — closed.** Split into
+  `style-src 'self'` (block-level, strict) + `style-src-attr 'unsafe-inline'`
+  (attribute-level, scoped to React's `style={...}` prop). Static iframe
+  heights converted from inline `style` to Tailwind arbitrary classes
+  (`h-[calc(100vh-220px)] min-h-[600px]`). Only remaining inline `style`
+  is the dynamic chart-bar width on `/engagements`, which now uses the
+  attribute-level escape hatch only.
+- **N-10 (LOW) vestigial psycopg2-binary — closed.** Moved from
+  `[project] dependencies` to a new `[project.optional-dependencies].lakebase`
+  extra. Hash-pinned `requirements.txt` + `requirements-dev.txt`
+  regenerated; runtime image no longer ships psycopg2 until T-211 needs it.
+- **N-11 (LOW) / T-220 token-dep regression risk — closed.** Removed
+  `current_user_token_or_empty()`. All routers (chat, engagements,
+  projects) now use strict `current_user_token`. `.env.example` documents
+  that local dev must set `DATABRICKS_TOKEN` (any non-empty string fine
+  in SQLite mode; real PAT for DBSQL mode).
+
 ## P1 — Code quality / "make it ours" (open)
 
-### T-220 Consolidate `current_user_token` and `current_user_token_or_empty`
-
-- **Problem.** Commit c760d62 (post-merge smoke-test fix) added a lenient
-  `current_user_token_or_empty()` so SQLite dev mode wouldn't 401 without
-  `DATABRICKS_TOKEN`. The strict `current_user_token()` is no longer used
-  anywhere in production code paths — only by its own tests. That's dead
-  code per CLAUDE.md.
-- **Plan.** Collapse the two into a single `current_user_token()` that
-  - Returns the header value when present.
-  - 401s under `STRICT_AUTH=1` when missing.
-  - Falls back to `DATABRICKS_TOKEN` then `""` (no warning) in dev.
-  Drop `current_user_token_or_empty()` and its callers; rewire to
-  `current_user_token()`. Update `tests/test_auth.py` — drop the
-  `test_token_no_header_no_dev_token_returns_401` test case (the new
-  behavior returns `""` in dev). Verify no remaining grep for `_or_empty`.
-- **Test / acceptance.** Full pytest suite green; manual `env -i` shell
-  smoke test (uvicorn + curl) passes without `DATABRICKS_TOKEN` set;
-  prod path with `STRICT_AUTH=1` still 401s.
-- **Blast radius.** Three router files + `auth.py` + tests. Behaviour-
-  preserving for prod and for happy-path dev.
+(Currently empty — T-220 closed in this sweep. Add new P1 items as
+they emerge.)
 
 ---
 

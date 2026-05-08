@@ -1,5 +1,5 @@
 """Tests for the current_user_email() / current_user_token() FastAPI deps
-(SDR F-TM-1, F-TM-4 + T-205 / F-TM-2)."""
+(SDR F-TM-1, F-TM-4 + T-205 / F-TM-2 + N-11 strict-token consolidation)."""
 
 import pytest
 from fastapi import Depends, FastAPI

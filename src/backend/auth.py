@@ -71,6 +71,14 @@ def current_user_token(
     warning so prod misconfigurations don't silently degrade). If neither
     is available raises 401 — there's no point returning an empty token to
     a downstream Databricks call.
+
+    SDR-4682 N-11: this dep was previously paired with a lenient
+    ``current_user_token_or_empty`` that returned ``""`` in dev. The
+    reviewer flagged the empty-token path as a silent F-TM-2 regression
+    vector — ``WorkspaceClient(token="")`` falls through the SDK auth
+    chain to App SP credentials. The strict variant is now the only one;
+    local dev sets ``DATABRICKS_TOKEN`` (any non-empty string is fine in
+    SQLite mode since the value is never sent upstream).
     """
     global _DEV_TOKEN_FALLBACK_LOGGED
     if x_forwarded_access_token:
@@ -93,27 +101,6 @@ def current_user_token(
         detail="No user token available (set DATABRICKS_TOKEN for dev or "
         "deploy under Databricks Apps for OBO).",
     )
-
-
-def current_user_token_or_empty(
-    x_forwarded_access_token: str | None = Header(
-        default=None, alias="X-Forwarded-Access-Token"
-    ),
-) -> str:
-    """FastAPI dependency: return the user's OBO access token, or empty string if unavailable.
-
-    Used for SQLite dev mode where a token is not strictly required.
-    Production (``STRICT_AUTH=1``): missing header → 401.
-    Dev: missing header → returns empty string (no warning).
-    """
-    if x_forwarded_access_token:
-        return x_forwarded_access_token
-    if _strict_auth_enabled():
-        raise HTTPException(
-            status_code=401, detail="Missing X-Forwarded-Access-Token"
-        )
-    fallback = os.environ.get("DATABRICKS_TOKEN", "").strip()
-    return fallback
 
 
 def is_admin(email: str) -> bool:

@@ -138,3 +138,21 @@ the app the way a developer would.
 `current_user_token()` is now dead code in routes — only its own tests
 keep it alive. Consolidating the two functions into one (lenient by
 default, strict via STRICT_AUTH) is on the backlog.
+
+**Follow-up — closed 2026-05-08 (SDR-4682 round-3 review, finding N-11).**
+The reviewer made the call: `WorkspaceClient(token="")` falls through the
+SDK auth chain to App SP credentials, silently regressing F-TM-2 if
+`STRICT_AUTH` ever flips off. Lenient-by-default was the wrong shape.
+Fix shipped in the round-3 sweep:
+- `current_user_token_or_empty` removed.
+- Strict `current_user_token` is now the only token dep; raises 401 if
+  neither header nor `DATABRICKS_TOKEN` is set.
+- `.env.example` documents that local dev needs `DATABRICKS_TOKEN` set
+  (any non-empty string for SQLite mode).
+- Smoke-test bug from c760d62 is back as a documented setup step rather
+  than a silent code workaround.
+
+**Generalisable principle:** when fixing a smoke-test bug, prefer a
+documented one-time setup step over a code path that loosens prod
+semantics. The latter creates an invisible regression vector that a
+later reviewer will (correctly) flag.

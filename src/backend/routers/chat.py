@@ -19,7 +19,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.backend.audit import record_event
-from src.backend.auth import current_user_email, current_user_token_or_empty
+from src.backend.auth import current_user_email, current_user_token
 from src.backend.config import settings
 from src.backend.schemas import ChatMessage, ChatResponse
 
@@ -67,7 +67,7 @@ def _query_stratego(message: str, user_token: str) -> str:
 async def chat(
     message: ChatMessage,
     user_email: str = Depends(current_user_email),
-    user_token: str = Depends(current_user_token_or_empty),
+    user_token: str = Depends(current_user_token),
 ) -> ChatResponse:
     prompt_length = len(message.message)
     try:

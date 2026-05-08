@@ -96,9 +96,9 @@ def record_event(
     keeping ``extra`` content-free.
 
     ``user_token`` is the strategist's OBO token from
-    ``current_user_token_or_empty()``. When provided AND
-    ``DATA_BACKEND=dbsql``, the event is mirrored to the
-    ``app_audit_log`` Delta table for queryability.
+    ``current_user_token()``. When provided AND ``DATA_BACKEND=dbsql``,
+    the event is mirrored to the ``app_audit_log`` Delta table for
+    queryability.
     """
     event: dict[str, Any] = {
         "ts": int(time.time() * 1000),
