@@ -43,3 +43,6 @@ static/
 
 # Cursor
 .cursor/
+
+# Personal tmux dev-loop helper
+/tmux-cockpit.sh
