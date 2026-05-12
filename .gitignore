@@ -46,3 +46,7 @@ static/
 
 # Personal tmux dev-loop helper
 /tmux-cockpit.sh
+.envrc
+
+# Databricks CLI / MCP resource tracker (local state)
+.databricks-resources.json
