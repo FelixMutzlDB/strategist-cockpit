@@ -21,7 +21,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.backend.database import SessionLocal, init_db  # noqa: E402
-from src.backend.models import Engagement, Project  # noqa: E402
+from src.backend.models import ActivityOverlay, Engagement, Project  # noqa: E402
+
+# T-212: imported so ``init_db`` registers the ``activity_overlay`` table
+# alongside ``engagements`` / ``projects``. The model itself is owned by
+# ``src/backend/models.py``; we re-export ``ActivityOverlay`` here purely
+# so ``Base.metadata.create_all`` sees it on the local dev path.
+_ = ActivityOverlay
 
 # T-107: source CSV has both "FY25-Q1" and "FY25Q1" — normalize on read.
 _QUARTER_DASH = re.compile(r"(FY\d{2})-(Q\d)", re.IGNORECASE)

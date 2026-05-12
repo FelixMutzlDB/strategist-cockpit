@@ -6,14 +6,49 @@ from src.backend.auth import current_user_email, current_user_token
 from src.backend.config import settings
 from src.backend.database import get_db
 from src.backend.models import Engagement
+from src.backend.repos import activity_overlay_repo
 from src.backend.repos import customer_engagements_repo as engagements_repo
 from src.backend.schemas import EngagementCreate, EngagementOut, EngagementUpdate
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])
 
+# T-212: fields routed to the overlay table, not the engagements table.
+_OVERLAY_FIELDS = ("impact_tags", "impact_notes")
+
 
 def _use_dbsql() -> bool:
     return settings.data_backend == "dbsql"
+
+
+def _sqlite_overlay_key(eng: Engagement) -> str:
+    """Stable overlay key for a SQLAlchemy engagement row.
+
+    Mirrors ``activity_overlay_repo.customer_engagement_key`` but operates
+    on the ORM object instead of a dict.
+    """
+    if eng.asq_id:
+        return f"asq:{eng.asq_id}"
+    return f"manual:{eng.id}"
+
+
+def _attach_sqlite_overlay(db: Session, eng: Engagement, user_email: str) -> Engagement:
+    """Populate ``impact_tags`` / ``impact_notes`` on the ORM object from the overlay.
+
+    Pydantic ``EngagementOut`` reads these as plain attributes; setting them
+    on the SQLAlchemy instance keeps the response surface identical to the
+    DBSQL path.
+    """
+    overlay = activity_overlay_repo.get_tags_sqlite(
+        db,
+        category="customer",
+        activity_key=_sqlite_overlay_key(eng),
+        strategist_email=user_email,
+    )
+    # ``setattr`` on a SQLAlchemy ORM instance is fine for non-mapped attrs —
+    # they're shed when the response is serialised.
+    eng.impact_tags = overlay["impact_tags"] if overlay else []  # type: ignore[attr-defined]
+    eng.impact_notes = overlay["impact_notes"] if overlay else None  # type: ignore[attr-defined]
+    return eng
 
 
 @router.get("/", response_model=list[EngagementOut])
@@ -50,7 +85,10 @@ def list_engagements(
         query = query.filter(Engagement.status == status)
     if customer:
         query = query.filter(Engagement.customer.ilike(f"%{customer}%"))
-    return query.order_by(Engagement.id.desc()).all()
+    rows = query.order_by(Engagement.id.desc()).all()
+    for eng in rows:
+        _attach_sqlite_overlay(db, eng, user_email)
+    return rows
 
 
 @router.get("/{engagement_id}", response_model=EngagementOut)
@@ -80,7 +118,7 @@ def get_engagement(
     )
     if not eng:
         raise HTTPException(status_code=404, detail="Engagement not found")
-    return eng
+    return _attach_sqlite_overlay(db, eng, user_email)
 
 
 @router.post("/", response_model=EngagementOut, status_code=201)
@@ -106,13 +144,27 @@ def create_engagement(
         return EngagementOut.model_validate(row)
 
     # Tenant key is stamped from the auth dep, never the payload (F-TM-1).
+    # T-212: split overlay-bound fields out before constructing the ORM row —
+    # they live in ``activity_overlay`` (SQLite mirror of activity_app_data).
+    payload = engagement.model_dump()
+    overlay_tags = payload.pop("impact_tags", []) or []
+    overlay_notes = payload.pop("impact_notes", None)
     db_engagement = Engagement(
-        **engagement.model_dump(),
+        **payload,
         strategist_email=user_email,
     )
     db.add(db_engagement)
     db.commit()
     db.refresh(db_engagement)
+    if overlay_tags or overlay_notes:
+        activity_overlay_repo.set_tags_sqlite(
+            db,
+            category="customer",
+            activity_key=_sqlite_overlay_key(db_engagement),
+            strategist_email=user_email,
+            tags=overlay_tags,
+            notes=overlay_notes,
+        )
     record_event(
         user_email=user_email,
         action="create",
@@ -120,7 +172,7 @@ def create_engagement(
         target_id=db_engagement.id,
         user_token=user_token,
     )
-    return db_engagement
+    return _attach_sqlite_overlay(db, db_engagement, user_email)
 
 
 @router.put("/{engagement_id}", response_model=EngagementOut)
@@ -163,10 +215,31 @@ def update_engagement(
     update_data = engagement.model_dump(exclude_unset=True)
     # Defence-in-depth: never let an Update payload re-stamp the tenant.
     update_data.pop("strategist_email", None)
+    # T-212: route overlay fields to activity_overlay, not the ORM row.
+    overlay_payload = {
+        k: update_data.pop(k) for k in list(_OVERLAY_FIELDS) if k in update_data
+    }
     for key, value in update_data.items():
         setattr(db_engagement, key, value)
     db.commit()
     db.refresh(db_engagement)
+    if overlay_payload:
+        existing = activity_overlay_repo.get_tags_sqlite(
+            db,
+            category="customer",
+            activity_key=_sqlite_overlay_key(db_engagement),
+            strategist_email=user_email,
+        ) or {"impact_tags": [], "impact_notes": None}
+        new_tags = overlay_payload.get("impact_tags", existing["impact_tags"]) or []
+        new_notes = overlay_payload.get("impact_notes", existing["impact_notes"])
+        activity_overlay_repo.set_tags_sqlite(
+            db,
+            category="customer",
+            activity_key=_sqlite_overlay_key(db_engagement),
+            strategist_email=user_email,
+            tags=new_tags,
+            notes=new_notes,
+        )
     record_event(
         user_email=user_email,
         action="update",
@@ -174,7 +247,7 @@ def update_engagement(
         target_id=engagement_id,
         user_token=user_token,
     )
-    return db_engagement
+    return _attach_sqlite_overlay(db, db_engagement, user_email)
 
 
 @router.delete("/{engagement_id}", status_code=204)
