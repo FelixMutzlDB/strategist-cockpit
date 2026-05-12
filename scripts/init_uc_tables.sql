@@ -265,3 +265,87 @@ SELECT
     engagement_status AS status,
     next_steps
 FROM main.field_strategist_cockpit.v_customer_engagements;
+
+
+-- --- T-213 UCO velocity view ---
+-- One row per (engagement_id, uco_id). Joins:
+--   v_customer_engagements_unified (asq_id-keyed, manual orphans dropped — no
+--     asq_uco linkage) -> asq_uco (UCO membership: an ASQ can have N UCOs)
+--   -> uco_change_data (rank=1 = latest snapshot; pre-engagement rows for
+--      start-stage; full history for the 90d-advance window).
+--
+-- Stage normalisation: uco_change_data uses suffixed labels like "U6-Live",
+-- "U1-Validating", "U7-Lost". REGEXP strips the suffix to U1..U7 so the
+-- dashboard can group cleanly. "U7-Lost" survives as U7 in the output.
+--
+-- stages_advanced_since_engagement_start uses MAX_BY(UCO_Stage, date) over
+-- snapshots with date <= ASQ_Start_Date as the start-state proxy. Returns
+-- negative on regressions and NULL when no pre-engagement snapshot exists
+-- (e.g. UCO created AFTER the ASQ).
+--
+-- stage_advance_within_90d = TRUE iff at least one uco_change_data row with
+-- stage_changed='Different Stage' AND new-stage ordinal > prev-stage ordinal
+-- fell in [ASQ_Start_Date, ASQ_Start_Date+90d].
+--
+-- NOTE on T-204 drift: spec said the view would `EXPLODE` a comma-separated
+-- `uco_ids` column on v_customer_engagements_unified. As of 2026-05-12 that
+-- column exists in app schema/repo but is NOT projected through to the UC
+-- view, AND customer_engagements_manual deployed table is missing it too.
+-- So we derive UCO membership via asq_uco directly — the path that actually
+-- works today. Manual orphan engagements (no asq_id) are dropped (INNER
+-- semantics). Surface "engagements without UCO data" as a separate health
+-- metric if needed downstream.
+CREATE OR REPLACE VIEW main.field_strategist_cockpit.v_customer_engagement_uco_velocity
+COMMENT 'T-213 UCO velocity per (engagement_id, uco_id). engagement_id = asq_id (manual orphans excluded — no asq_uco linkage). Stage normalised to U1..U7. stages_advanced_since_engagement_start uses MAX_BY(UCO_Stage, date) over pre-engagement snapshots; can be negative on regressions or NULL when no pre-engagement snapshot exists. stage_advance_within_90d = TRUE iff any uco_change_data row with stage_changed=Different Stage AND new ordinal > prev ordinal fell in [ASQ_Start_Date, +90d].'
+AS
+WITH eng AS (
+  SELECT e.strategist_email, e.asq_id AS engagement_id, e.account_id, e.customer,
+         e.engagement_type, e.engagement_format, e.fy, e.quarter, e.ASQ_Start_Date
+  FROM main.field_strategist_cockpit.v_customer_engagements_unified e
+  WHERE e.asq_id IS NOT NULL
+),
+eng_uco AS (
+  SELECT eng.*, au.UCO_ID AS uco_id
+  FROM eng JOIN main.field_usage_dashboard.asq_uco au ON au.ASQ_Name = eng.engagement_id
+  WHERE au.UCO_ID IS NOT NULL
+),
+latest AS (
+  SELECT Usecase_ID,
+         REGEXP_EXTRACT(UCO_Stage,  '^(U[0-9])', 1) AS current_stage,
+         REGEXP_EXTRACT(prev_stage, '^(U[0-9])', 1) AS previous_stage,
+         days_in_stage AS days_in_current_stage,
+         max_change_date AS most_recent_stage_change_date
+  FROM main.field_usage_dashboard.uco_change_data WHERE rank = 1
+),
+start_stage AS (
+  SELECT eu.engagement_id, eu.uco_id,
+         REGEXP_EXTRACT(MAX_BY(ucd.UCO_Stage, ucd.date), '^(U[0-9])', 1) AS start_stage
+  FROM eng_uco eu
+  JOIN main.field_usage_dashboard.uco_change_data ucd
+    ON ucd.Usecase_ID = eu.uco_id AND ucd.date <= eu.ASQ_Start_Date
+  GROUP BY eu.engagement_id, eu.uco_id
+),
+advances_90d AS (
+  SELECT eu.engagement_id, eu.uco_id,
+         MAX(CASE WHEN ucd.stage_changed = 'Different Stage'
+                   AND CAST(REGEXP_EXTRACT(ucd.UCO_Stage,  '^U([0-9])', 1) AS INT) >
+                       CAST(REGEXP_EXTRACT(ucd.prev_stage, '^U([0-9])', 1) AS INT)
+                   AND ucd.date BETWEEN eu.ASQ_Start_Date AND DATE_ADD(eu.ASQ_Start_Date, 90)
+                 THEN 1 ELSE 0 END) AS advanced
+  FROM eng_uco eu
+  LEFT JOIN main.field_usage_dashboard.uco_change_data ucd ON ucd.Usecase_ID = eu.uco_id
+  GROUP BY eu.engagement_id, eu.uco_id
+)
+SELECT eu.strategist_email, eu.engagement_id, eu.uco_id, eu.account_id, eu.customer,
+       eu.engagement_type, eu.engagement_format, eu.fy, eu.quarter, eu.ASQ_Start_Date,
+       l.current_stage, l.previous_stage, l.days_in_current_stage, l.most_recent_stage_change_date,
+       ss.start_stage,
+       CASE WHEN l.current_stage IS NOT NULL AND ss.start_stage IS NOT NULL
+            THEN CAST(SUBSTRING(l.current_stage,2,1) AS INT) - CAST(SUBSTRING(ss.start_stage,2,1) AS INT)
+            ELSE NULL END AS stages_advanced_since_engagement_start,
+       COALESCE(adv.advanced = 1, FALSE) AS stage_advance_within_90d
+FROM eng_uco eu
+JOIN latest l ON l.Usecase_ID = eu.uco_id
+LEFT JOIN start_stage ss ON ss.engagement_id = eu.engagement_id AND ss.uco_id = eu.uco_id
+LEFT JOIN advances_90d adv ON adv.engagement_id = eu.engagement_id AND adv.uco_id = eu.uco_id;
+-- --- end T-213 ---
