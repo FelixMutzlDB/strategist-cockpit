@@ -711,7 +711,99 @@ SERIALIZED_DASHBOARD: dict = {
         "WHERE strategist_email IS NOT NULL AND fy_offset > 0\n",
         "ORDER BY customer, engagement_fy_int, fy_offset\n"
       ]
+    },
+    # --- T-219 evangelism reach datasets ---
+    # FY x event_type aggregate. `events_planned_next_30d` is pre-aggregated
+    # here (rather than at row level) so the KPI tile can SUM across rows that
+    # match the active strategist_email / fy filter. NULL views/participants/
+    # comments fold to 0 via COALESCE so SUM stays integer (never NaN).
+    {
+      "name": "ds_evangelism_summary",
+      "displayName": "evangelism_summary",
+      "queryLines": [
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  fy,\n",
+        "  event_type,\n",
+        "  SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS events_delivered,\n",
+        "  SUM(CASE WHEN status = 'planned' THEN 1 ELSE 0 END) AS events_planned,\n",
+        "  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS events_cancelled,\n",
+        "  SUM(\n",
+        "    CASE WHEN status = 'planned'\n",
+        "              AND event_date IS NOT NULL\n",
+        "              AND event_date >= current_date()\n",
+        "              AND event_date <= date_add(current_date(), 30)\n",
+        "         THEN 1 ELSE 0 END\n",
+        "  ) AS events_planned_next_30d,\n",
+        "  COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(views, 0) ELSE 0 END), 0) AS total_views,\n",
+        "  COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(participants, 0) ELSE 0 END), 0) AS total_attendance,\n",
+        "  COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(comments, 0) ELSE 0 END), 0) AS total_comments,\n",
+        "  try_divide(\n",
+        "    SUM(CASE WHEN status = 'delivered' THEN COALESCE(views, 0) ELSE 0 END),\n",
+        "    SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END)\n",
+        "  ) AS avg_views_per_event\n",
+        "FROM main.field_strategist_cockpit.evangelism_events\n",
+        "GROUP BY strategist_email, fy, event_type\n",
+        "ORDER BY fy, event_type\n"
+      ]
+    },
+    # Long-form for the stacked bar: one row per (strategist, fy, quarter,
+    # event_type, status). Cancelled rows are kept so the stacked bar can
+    # optionally show them; the KPI panels filter to delivered via widget
+    # encoding rather than excluding here.
+    {
+      "name": "ds_evangelism_by_quarter",
+      "displayName": "evangelism_by_quarter",
+      "queryLines": [
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  fy,\n",
+        "  quarter,\n",
+        "  event_type,\n",
+        "  status,\n",
+        "  COUNT(*) AS events_count,\n",
+        "  COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(views, 0) ELSE 0 END), 0) AS views_delivered,\n",
+        "  COALESCE(SUM(CASE WHEN status = 'delivered' THEN COALESCE(participants, 0) ELSE 0 END), 0) AS attendance_delivered\n",
+        "FROM main.field_strategist_cockpit.evangelism_events\n",
+        "WHERE quarter IS NOT NULL\n",
+        "GROUP BY strategist_email, fy, quarter, event_type, status\n",
+        "ORDER BY fy, quarter, event_type, status\n"
+      ]
+    },
+    # Row-level event detail. Used by two panels: (a) top-N by views detail
+    # table (widget applies LIMIT 10 on top of the deterministic SQL ORDER
+    # BY views DESC, event_date DESC, event_name ASC); (b) leading-indicator
+    # tile filtered by `is_planned_next_30d = true`. `attendance` is an alias
+    # for the schema column `participants` so the dashboard's user-facing
+    # vocabulary stays consistent with the spec.
+    {
+      "name": "ds_evangelism_top",
+      "displayName": "evangelism_top_events",
+      "queryLines": [
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  event_name,\n",
+        "  event_date,\n",
+        "  event_type,\n",
+        "  location,\n",
+        "  fy,\n",
+        "  quarter,\n",
+        "  status,\n",
+        "  COALESCE(views, 0) AS views,\n",
+        "  COALESCE(participants, 0) AS attendance,\n",
+        "  COALESCE(comments, 0) AS comments,\n",
+        "  CASE\n",
+        "    WHEN status = 'planned'\n",
+        "         AND event_date IS NOT NULL\n",
+        "         AND event_date >= current_date()\n",
+        "         AND event_date <= date_add(current_date(), 30)\n",
+        "    THEN true ELSE false\n",
+        "  END AS is_planned_next_30d\n",
+        "FROM main.field_strategist_cockpit.evangelism_events\n",
+        "ORDER BY COALESCE(views, 0) DESC, event_date DESC, event_name ASC\n"
+      ]
     }
+    # --- end T-219 ---
   ],
   "pages": [
     {
@@ -3182,7 +3274,620 @@ SERIALIZED_DASHBOARD: dict = {
       ],
       "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
       "layoutVersion": "GRID_V1"
+    },
+    # --- T-219 evangelism reach page ---
+    # Inserted at the end of the pages array per coordinator conflict-avoidance
+    # convention (other parallel tasks T-212/T-213/T-222 also append pages).
+    # Spec ordering ("after Customer Impact, before Initiatives") is informational;
+    # the coordinator may reorder pages post-merge.
+    {
+      "name": "p_evangelism",
+      "displayName": "Evangelism reach",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_evangelism",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Evangelism reach\n",
+                "\n",
+                "External talks, podcasts, workshops, roundtables — the strategist's *broadcast* surface.\n",
+                "Measures how far the message travelled (views, attendance) and what formats actually land. Filtered by `strategist_email` from the Global Filters page; `fy` filter narrows to a single fiscal year."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_evangelism_events_delivered",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "sum(events_delivered)",
+                      "expression": "SUM(`events_delivered`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(events_delivered)"
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Events FY (delivered)",
+                "showDescription": True,
+                "description": "Excludes cancelled + planned"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_evangelism_total_views",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "sum(total_views)",
+                      "expression": "SUM(`total_views`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_views)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact-long",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Total views FY",
+                "showDescription": True,
+                "description": "Delivered events only"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_evangelism_total_attendance",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "sum(total_attendance)",
+                      "expression": "SUM(`total_attendance`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_attendance)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact-long",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Total attendance FY",
+                "showDescription": True,
+                "description": "Sum of `participants`"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_evangelism_unique_types",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "countdistinct(event_type)",
+                      "expression": "COUNT(DISTINCT `event_type`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "countdistinct(event_type)"
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Unique event_types FY",
+                "showDescription": True,
+                "description": "Keynote / Breakout / Podcast / ..."
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_evangelism_planned_next_30d",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "sum(events_planned_next_30d)",
+                      "expression": "SUM(`events_planned_next_30d`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(events_planned_next_30d)"
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Planned next 30d",
+                "showDescription": True,
+                "description": "Leading indicator — book early"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_evangelism_by_quarter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_by_quarter",
+                  "fields": [
+                    {
+                      "name": "quarter",
+                      "expression": "`quarter`"
+                    },
+                    {
+                      "name": "sum(events_count)",
+                      "expression": "SUM(`events_count`)"
+                    },
+                    {
+                      "name": "event_type",
+                      "expression": "`event_type`"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "quarter",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(events_count)",
+                  "scale": {
+                    "type": "quantitative",
+                    "stackMode": "stacked"
+                  }
+                },
+                "color": {
+                  "fieldName": "event_type",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Events per quarter × event_type"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_evangelism_avg_views",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_summary",
+                  "fields": [
+                    {
+                      "name": "event_type",
+                      "expression": "`event_type`"
+                    },
+                    {
+                      "name": "avg(avg_views_per_event)",
+                      "expression": "AVG(`avg_views_per_event`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "event_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(avg_views_per_event)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact-long",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Avg views per event_type"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 4,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "tbl_evangelism_top_events",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_top",
+                  "fields": [
+                    {
+                      "name": "event_name",
+                      "expression": "`event_name`"
+                    },
+                    {
+                      "name": "event_date",
+                      "expression": "`event_date`"
+                    },
+                    {
+                      "name": "event_type",
+                      "expression": "`event_type`"
+                    },
+                    {
+                      "name": "location",
+                      "expression": "`location`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "views",
+                      "expression": "`views`"
+                    },
+                    {
+                      "name": "attendance",
+                      "expression": "`attendance`"
+                    },
+                    {
+                      "name": "comments",
+                      "expression": "`comments`"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "event_name",
+                    "displayName": "Event",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "event_date",
+                    "displayName": "Date",
+                    "type": "date"
+                  },
+                  {
+                    "fieldName": "event_type",
+                    "displayName": "Type",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "location",
+                    "displayName": "Location",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "views",
+                    "displayName": "Views",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "attendance",
+                    "displayName": "Attendance",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "comments",
+                    "displayName": "Comments",
+                    "type": "integer"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Top events FY by views (deterministic: views DESC → event_date DESC → event_name ASC)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_evangelism_status_mix",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_by_quarter",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "sum(events_count)",
+                      "expression": "SUM(`events_count`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(events_count)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "status",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Status mix (planned / delivered / cancelled)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "tbl_evangelism_planned_next_30d",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evangelism_top",
+                  "fields": [
+                    {
+                      "name": "event_name",
+                      "expression": "`event_name`"
+                    },
+                    {
+                      "name": "event_date",
+                      "expression": "`event_date`"
+                    },
+                    {
+                      "name": "event_type",
+                      "expression": "`event_type`"
+                    },
+                    {
+                      "name": "is_planned_next_30d",
+                      "expression": "`is_planned_next_30d`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "name": "is_planned_next_30d_filter",
+                      "expression": "`is_planned_next_30d` = true"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "event_name",
+                    "displayName": "Event",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "event_date",
+                    "displayName": "Date",
+                    "type": "date"
+                  },
+                  {
+                    "fieldName": "event_type",
+                    "displayName": "Type",
+                    "type": "string"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Planned in next 30 days — leading indicator",
+                "showDescription": True,
+                "description": "Status = 'planned' AND event_date between today and today + 30d"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 16,
+            "width": 3,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
     }
+    # --- end T-219 ---
   ]
 }
 
