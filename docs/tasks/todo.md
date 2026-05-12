@@ -328,31 +328,61 @@ Landed in commits on `main`:
 - **Test / acceptance.** CRUD works with UCO IDs; list view shows them; migration is additive.
 - **Blast radius.** Schema (additive), API, UI.
 
-### T-212 Qualitative impact tags on engagements
-- **Problem.** The Impact Dashboard is all $DBU. The strategist's actual leverage — blockers cleared, exec intros, POCs unlocked, competitors displaced, UCO advances, new products introduced — is invisible. Without these we under-tell the story to leadership and over-rely on a noisy revenue proxy.
+### T-212 Qualitative impact tags across all activity categories
+- **Problem.** The Impact Dashboard is all $DBU and only covers customer engagements — one of three top-level activity categories (T-215/T-216). The strategist's actual leverage — blockers cleared, exec intros, POCs unlocked, competitors displaced, UCO advances, products introduced, roadmap influenced, talks that landed, CXO conversations, teams enabled — is invisible. Without these we under-tell the story to leadership and over-rely on a noisy revenue proxy that ignores 2/3 of the work.
 - **Plan.**
-  1. Extend the `engagement_app_data` overlay with `impact_tags ARRAY<STRING>` and optional `impact_notes STRING`. Closed enum (Pydantic + DB-level CHECK on app side): `blocker_cleared`, `exec_intro`, `poc_unlocked`, `competitor_displaced`, `uco_advanced`, `product_introduced`. Update `scripts/init_uc_tables.sql` (Delta) and the SQLite ORM model (mirror as comma-separated `String(500)` for dev parity).
-  2. Pydantic schema: `impact_tags: list[Literal[...]] = []` on `EngagementUpdate` + `EngagementOut`. Validator rejects unknown tags and duplicates.
-  3. Backend: write path stamps tags into the overlay keyed by `(engagement_id, strategist_email)`; read path joins overlay back onto `v_engagements_unified` and returns the array.
-  4. UI: chip multi-select under a new "Outcomes" section in the Engagement edit dialog; chips render on the engagement row and in the view dialog.
-  5. Dashboard (`scripts/build_dashboard.py`): new dataset `ds_impact_tags` that `LATERAL VIEW explode`s the array. Two new panels — "Outcome mix" KPI strip on Executive Summary (count per tag, FY-filtered), and "Outcomes by engagement type" 100% stacked bar on Impact Analysis.
+  1. **One unified overlay** instead of per-category overlays. Replace the dormant `customer_engagement_app_data` (post-T-215 name) with a new `activity_app_data` table:
+     ```
+     activity_app_data (
+       category         STRING NOT NULL,   -- 'customer'|'evangelism'|'initiative'|'planning'|'exec_meeting'
+       activity_key     STRING NOT NULL,   -- 'asq:<id>'|'manual:<id>'|'evangelism:<id>'|'initiative:<id>'|'planning:<id>'|'exec:<id>'
+       strategist_email STRING NOT NULL,
+       impact_tags      ARRAY<STRING>,
+       impact_notes     STRING,
+       updated_at       TIMESTAMP,
+       PRIMARY KEY (category, activity_key, strategist_email)
+     ) USING DELTA;
+     ```
+     `activity_key` is the only way to keep SFDC ASQs taggable (their row lives in `asq_uco`, which we can't edit). Drop `customer_engagement_app_data` in the same migration — it was never used.
+  2. Closed tag enum (10 tags, Pydantic `Literal[...]` + DB-level CHECK via app, since Delta has no CHECK on array elements):
+     - `blocker_cleared` (any) — internal or customer-side blocker resolved
+     - `exec_intro` (any) — strategist arranged a customer ↔ Databricks exec connection
+     - `cxo_engaged` (any) — meaningful CXO conversation happened (auto-tagged from `exec_meetings.is_cxo`, manual override allowed)
+     - `poc_unlocked` (customer) — POC started or progressed because of this work
+     - `competitor_displaced` (customer) — directly removed/blocked a competitor
+     - `uco_advanced` (customer) — UCO stage progressed (also derivable via T-213 join, but manual tag captures attribution narrative)
+     - `product_introduced` (customer) — net-new product line landed at this customer
+     - `roadmap_influenced` (initiative) — product team accepted a feature request or feedback
+     - `evangelism_landed` (evangelism) — a talk visibly converted downstream (opp, UCO, named follow-up)
+     - `team_enabled` (evangelism/initiative) — internal community / FE team capability built
+  3. **Backend (`src/backend/repos/activity_overlay_repo.py`, NEW)**: `get_tags(category, activity_key, strategist_email)`, `set_tags(category, activity_key, strategist_email, tags, notes)` via `MERGE INTO`. Per-request: every read of a category row LEFT JOINs the overlay; write path stamps `strategist_email` from `current_user_email()`, never from payload (T-206 pattern).
+  4. **Pydantic**: `impact_tags: list[Literal[...]] = []` on Update/Out schemas for all 5 categories. Validator rejects unknown tags and duplicates. Category-tag pairs that don't make sense (e.g., `poc_unlocked` on an evangelism event) are allowed at the schema level but flagged with a soft warning in the UI — we don't want the schema to be the policy enforcer.
+  5. **UI**: chip multi-select component (`ImpactTagPicker.tsx`, reusable) lives in a new "Outcomes" section on every activity edit dialog. Chips render on the activity row and in the view dialog. Customer Engagements page gets it first; future pages (Evangelism, Initiatives, Exec Meetings) reuse it.
+  6. **Dashboard (`scripts/build_dashboard.py`)**: new dataset `ds_activity_impact_tags` that joins `v_engagement_categories_unified` to `activity_app_data` and `LATERAL VIEW explode`s the array. Three new panels:
+     - "Outcome mix (all categories)" KPI strip on Page 1 (Portfolio at a glance — see T-224), FY-filtered.
+     - "Outcomes by category" 100% stacked bar on Page 1 (which categories contribute which outcomes?).
+     - "Top outcomes per Focus account" detail table on Page 2 (Customer Impact).
+  7. SQLite mirror for dev parity: a single `activity_overlay` table with the same shape; ORM model + Alembic-free migration in `data/seed_database.py`.
 - **Test design.**
-  - Unit (Pydantic): unknown tag → 422; duplicate tag in payload → 422; empty list → 200; valid multi-tag → 200.
-  - Repo (mock SQL): `engagements_repo.update()` in `dbsql` mode constructs an UPSERT into `engagement_app_data` with the tag array and the caller's `strategist_email` (spoofing test: payload-supplied email is ignored — same pattern as T-206).
-  - Repo (SQLite): round-trip through ORM — set two tags, read back, assert order-insensitive equality.
-  - HTTP: PUT `/api/engagements/{id}` with `impact_tags=["blocker_cleared","exec_intro"]` → 200 and GET returns them; PUT with `impact_tags=["nope"]` → 422.
-  - UI (manual click-path): open an engagement, select two tags, save, reload page, tags render in row + view dialog.
-  - Dashboard: run `python scripts/build_dashboard.py` against a seeded warehouse; `ds_impact_tags` returns non-empty rows; visual check on both new panels.
+  - Unit (Pydantic): unknown tag → 422; duplicate tag → 422; empty list → 200; valid multi-tag → 200; oversize `impact_notes` (>4000 chars) → 422.
+  - Repo (mock SQL): `activity_overlay_repo.set_tags()` in `dbsql` mode constructs a `MERGE INTO activity_app_data ... USING ... ON category = ? AND activity_key = ? AND strategist_email = ?` with the caller's email (spoofing test: payload-supplied email is ignored — same pattern as T-206).
+  - Repo (mock SQL): cross-tenant read — Alice's tags are not returned to Bob (`WHERE strategist_email = :me` is mandatory).
+  - Repo (SQLite): round-trip — set two tags via `set_tags(category="customer", activity_key="asq:123", ...)`, read back, assert order-insensitive equality.
+  - HTTP: PUT `/api/engagements/{id}` with `impact_tags=["blocker_cleared","exec_intro"]` → 200 and GET returns them; PUT with `impact_tags=["nope"]` → 422; PUT with `impact_tags=["blocker_cleared","blocker_cleared"]` → 422.
+  - HTTP cross-category: PUT `/api/engagements/{id}` and PUT `/api/evangelism/{id}` (when that route exists) write to the *same* overlay table with different `category` values — assert overlay row count grows by 2.
+  - UI (manual click-path): open a customer engagement, select two tags + a note, save, reload page, tags render in row + view dialog with chips colour-coded by tag family.
+  - Dashboard: run `python scripts/build_dashboard.py` against a seeded warehouse; `ds_activity_impact_tags` returns non-empty rows across ≥2 categories; visual check on all three new panels.
 - **Success criteria.**
-  - ≥80% of FY26 engagements carry ≥1 tag within two weeks of merge (operational adoption).
-  - "Outcome mix" tile shows non-zero counts per tag, FY-filterable, strategist-filtered.
-  - One slide in Felix's next portfolio review is replaced by a screenshot of the Outcome mix tile (i.e., the dashboard is now a primary artefact, not a backup).
-- **Blast radius.** Cross-cuts (overlay schema, API, UI, dashboard) but small per layer. Additive only — no breaking change. Coordinate with T-211 if Lakebase Autoscaling lands first (column lives in the OLTP store).
+  - ≥80% of FY26 customer engagements carry ≥1 tag within two weeks of merge.
+  - ≥50% of FY26 evangelism events + initiatives carry ≥1 tag once T-219/T-221 surfaces the UI for those categories.
+  - "Outcome mix" tile shows non-zero counts per tag, FY-filterable, strategist-filtered, **category-filterable** (the key affordance over a customer-only tag system).
+  - One slide in Felix's next portfolio review is replaced by a screenshot of the Outcome mix tile.
+- **Blast radius.** Cross-cuts overlay schema (NEW table + drop dormant one), API (touches all 5 category routers, but only one when they ship sequentially), UI (one new shared component), dashboard (3 new panels), SQLite dev mirror. Additive only — no breaking change for callers of existing routes. **Depends on T-215 (renames) and T-216 (new activity tables) having landed** so the overlay's `category` enum maps to real tables. Coordinate with T-211 if Lakebase Autoscaling lands first (overlay lives in the OLTP store).
 
 ### T-213 UCO velocity panel
 - **Problem.** Engagements carry `uco_ids` since T-204, but the dashboard never joins to UCO state. The strategist's headline job — moving accounts U1→U6 — is the most under-measured outcome we own. Today an engagement that unlocks a U3→U5 jump looks identical to one that did nothing.
 - **Plan.**
-  1. New view `main.field_strategist_cockpit.v_engagement_uco_velocity` (DDL in `scripts/init_uc_tables.sql`). Explodes `v_engagements_unified.uco_ids`, joins to `main.field_usage_dashboard.asq_uco` on `uco_id`. Returns one row per (engagement_id, uco_id) with: `current_stage` (U1..U6), `previous_stage`, `days_in_current_stage`, `stages_advanced_since_engagement_start`, `stage_advance_within_90d` (boolean), `most_recent_stage_change_date`.
+  1. New view `main.field_strategist_cockpit.v_customer_engagement_uco_velocity` (DDL in `scripts/init_uc_tables.sql`). Explodes `v_customer_engagements_unified.uco_ids`, joins to `main.field_usage_dashboard.asq_uco` on `uco_id`. Returns one row per (engagement_id, uco_id) with: `current_stage` (U1..U6), `previous_stage`, `days_in_current_stage`, `stages_advanced_since_engagement_start`, `stage_advance_within_90d` (boolean), `most_recent_stage_change_date`.
   2. New datasets in `build_dashboard.py`: `ds_uco_velocity_summary` (aggregate) + `ds_uco_velocity_detail` (per-row for the table panel).
   3. New panels on Impact Analysis:
      - KPI tile: % of FY-active engagements with ≥1 stage advance within 90 days.
@@ -373,7 +403,7 @@ Landed in commits on `main`:
 - **Blast radius.** One UC view (new, additive) + dashboard datasets/panels. No app/schema change. Depends on T-204 being populated for real engagements (already true) and on `asq_uco` access being granted to the Apps SP / Felix's OBO scope.
 
 ### T-214 Windowed revenue attribution
-- **Problem.** Today's revenue datasets (`ds_focus_revenue`, `ds_advisor_benchmark`, `ds_accounts_yoy`, `ds_oneoff_impact_summary`, `ds_focus_impact_summary`) join `v_engagements_unified` to `rpt_c360_overview_unpivoted` with only fiscal-year filters (`fiscal_year BETWEEN 2024 AND 2027`). A Focus account engaged in FY26 contributes revenue from FY24/FY25 too, which is tenure not impact. The "Advisor vs Central region" YoY then looks great for reasons that have nothing to do with us.
+- **Problem.** Today's revenue datasets (`ds_focus_revenue`, `ds_advisor_benchmark`, `ds_accounts_yoy`, `ds_oneoff_impact_summary`, `ds_focus_impact_summary`) join `v_customer_engagements_unified` to `rpt_c360_overview_unpivoted` with only fiscal-year filters (`fiscal_year BETWEEN 2024 AND 2027`). A Focus account engaged in FY26 contributes revenue from FY24/FY25 too, which is tenure not impact. The "Advisor vs Central region" YoY then looks great for reasons that have nothing to do with us.
 - **Plan.**
   1. Define attribution windows as named constants at the top of `build_dashboard.py`:
      - `ONEOFF_WINDOW_QUARTERS = (1, 4)` — engagement_quarter +1 .. +4 inclusive.
@@ -491,6 +521,135 @@ Landed in commits on `main`:
   - Manual: run `--sync` on Felix's current scribble for the last 14 days; spot-check 5 proposed updates before confirming.
 - **Blast radius.** Cross-repo — lives in `vibe/plugins/strategist-toolbox/`. No code in this repo. Depends on T-215 + T-216 + T-217 having landed. UC writes (vs SF writes) are new for this skill — must reuse the DBSQL pattern from `src/backend/dbsql.py` rather than re-inventing.
 
+### T-219 Dashboard page: Evangelism reach
+- **Problem.** Evangelism (keynotes, breakouts, workshops, podcasts, moderation, roundtables) is one of three top-level activity categories but is entirely absent from the Impact Dashboard. Today the only place this data lives is the Google Sheet; once T-217 backfills `evangelism_events` it becomes queryable, but until a page surfaces it, leadership still sees "the strategist did N customer engagements" instead of "the strategist did N customer engagements *and* delivered M talks reaching K people."
+- **Plan.**
+  1. Three new datasets in `scripts/build_dashboard.py`:
+     - `ds_evangelism_summary` — FY × event_type aggregate: `events_delivered`, `events_planned`, `events_cancelled`, `total_views`, `total_attendance`, `total_comments`, `avg_views_per_event` (group by `event_type`, filter on `status`).
+     - `ds_evangelism_by_quarter` — quarter × event_type long-form for the stacked bar.
+     - `ds_evangelism_top` — top-N events by `views` (configurable; default 10) with `event_name`, `event_date`, `event_type`, `location`, `views`, `attendance`, `comments`.
+  2. New dashboard page **"Evangelism reach"** (insert after "Customer Impact", before "Initiatives"). Panels:
+     - KPI strip: Events FY (delivered), Total views FY, Total attendance FY, Unique event_types FY, Planned next 30d.
+     - Stacked bar: Events per quarter × event_type (Keynote/Breakout/Workshop/Podcast/Moderation/Roundtable/Lightning Talk/Other).
+     - Bar chart: Avg views per event_type (which formats actually land).
+     - Detail table: Top events FY by views (with delivered/planned/cancelled badge).
+     - Side panel: "Status mix" donut (planned / delivered / cancelled), FY-filtered.
+     - Leading-indicator tile: "Events planned in next 30 days" (count + list of event_name + event_date), uses today's date as anchor.
+- **Test design.**
+  - SQL unit (synthetic, DBSQL integration, skipped without creds): seed 5 evangelism rows across 2 quarters, 3 event_types, 2 strategists → `ds_evangelism_summary` returns the expected per-event_type aggregates for the caller's email only (tenancy assertion).
+  - SQL unit: row with `status='cancelled'` does not count in `events_delivered`; row with future `event_date` and `status='planned'` counts in "Planned next 30d" only if `event_date <= current_date() + interval 30 days`.
+  - SQL unit: `views` NULL → contributes 0 to `total_views` (not `NaN`); `attendance` NULL same.
+  - SQL unit: `ds_evangelism_top` ties — same views value across two rows → deterministic ordering by `event_date DESC` then `event_name ASC`.
+  - Dashboard build: `python scripts/build_dashboard.py` runs cleanly; all 6 panels render with real backfilled data from T-217.
+- **Success criteria.**
+  - Total `events_delivered` in FY26 matches the sheet's manually-pulled count ±0 (after T-217 lands).
+  - "Avg views per event_type" surfaces at least one non-obvious finding (e.g., podcasts > keynotes for reach per hour invested) — qualitative bar, but the panel must actually *enable* the question.
+  - Felix can answer "how much external reach did I drive in FY26?" with one number from Page 3.
+  - Leading-indicator tile actually drives action: at least one planned event gets a status-update edit within 7 days of dashboard launch (proves the page is being read).
+- **Blast radius.** SQL only — three new datasets in `build_dashboard.py` + one new page block. No app/schema change. **Depends on T-216 (table) + T-217 (data).** Parallelisable with T-221 / T-222.
+
+### T-221 Dashboard page: Initiative outcomes
+- **Problem.** Internal initiatives (Field Eng improvement projects, FEIP tickets, product-feedback campaigns) are the second uncounted top-level category. They're where the strategist's *organisational* leverage shows up — but today they live in the Google Sheet, invisible to any dashboard. Once T-217 lands the data, leadership still won't see it unless we wire panels.
+- **Plan.**
+  1. Two new datasets in `build_dashboard.py`:
+     - `ds_initiatives_status` — FY × status aggregate: `active`, `on_hold`, `paused`, `complete`. Plus `last_activity_at` (latest of `updated_at` across child rows in exec_meetings/customer_engagements linked via `initiative_id`).
+     - `ds_initiatives_with_links` — initiative-level detail: `name`, `feip_ticket`, `status`, `fy`, `linked_exec_meeting_count`, `linked_customer_engagement_count`, `days_since_last_activity`.
+  2. New dashboard page **"Initiative outcomes"**. Panels:
+     - KPI strip: Active initiatives, Completed FY, On hold, Stalled (`days_since_last_activity > 30`), FEIP tickets tracked.
+     - Stacked bar: Initiatives by status × FY (so you see "complete" growing over time).
+     - Detail table: Initiatives FY with `name`, `feip_ticket` (linked if present), `status`, `last_activity_at`, `linked_exec_meeting_count`, `linked_customer_engagement_count`. Sortable by stale-ness.
+     - Cross-category panel: "Initiatives with CXO sponsorship" — initiatives where ≥1 linked exec_meeting has `is_cxo=true`. Shows which internal projects are exec-backed.
+     - Leading-indicator tile: "Stalled initiatives" (count + list of name + days_since_last_activity), threshold configurable, default 30 days.
+- **Test design.**
+  - SQL unit (synthetic): seed 4 initiatives — one of each status — verify `ds_initiatives_status` aggregates match. One stalled (last_activity 45d ago), one fresh (5d ago) → stalled tile counts 1, not 2.
+  - SQL unit: initiative with 0 linked exec_meetings/customer_engagements → appears in detail table with counts = 0, not NULL.
+  - SQL unit: initiative with 2 exec_meetings, one with `is_cxo=true` → appears in "CXO sponsorship" panel; initiative with only `is_cxo=false` linkages does not.
+  - SQL unit: `feip_ticket` NULL → renders as "—" in detail table (handled at panel formatting, not view).
+  - SQL unit: cross-strategist tenancy — Alice's initiatives don't leak into Bob's aggregates.
+  - Dashboard build: 5 panels render; visual diff against last week's snapshot is stable.
+- **Success criteria.**
+  - "Stalled initiatives" tile flags at least one real initiative on launch and Felix takes action (close/revive/note) within 7 days — proves it's a *useful* leading indicator, not just a chart.
+  - "Initiatives with CXO sponsorship" returns ≥1 row by end of FY26 (i.e., the cross-table linkage actually works for real data).
+  - One QBR slide is replaced with a screenshot of the Initiatives status stacked bar.
+- **Blast radius.** SQL only — 2 datasets + 1 page block. No app/schema change. **Depends on T-216 + T-217 + T-218** (T-218 keeps `last_activity_at` fresh; without it the stalled tile is unreliable). Parallelisable with T-219 / T-222.
+
+### T-222 Dashboard page: Relationship depth (exec meetings)
+- **Problem.** The strategist's job at any senior account is *relationship depth* — how many CXOs we engage, how often, across how many accounts. Today this is anecdotal. Once `exec_meetings` (T-216) is populated, depth becomes measurable. Without a page, the data sits inert.
+- **Plan.**
+  1. Three new datasets:
+     - `ds_exec_meetings_summary` — FY aggregate: `meetings_total`, `cxo_meetings`, `distinct_cxos`, `distinct_accounts`, `distinct_accounts_with_cxo`.
+     - `ds_exec_meetings_per_account` — account-level: `customer`, `account_id`, `total_meetings`, `cxo_meetings`, `last_meeting_date`, `linked_initiative_count`, `linked_evangelism_count`.
+     - `ds_exec_meetings_gap` — accounts with `is_cxo=true` exec meetings in the last 180d but NO customer_engagement in the same window (the "we have the relationship but no work in flight" gap).
+  2. New dashboard page **"Relationship depth"**. Panels:
+     - KPI strip: Distinct CXOs FY, Distinct accounts with CXO meeting FY, Total exec meetings FY, CXO % (cxo_meetings / total).
+     - Heatmap: Exec meetings per Focus account × quarter (rows = Focus accounts, columns = FY26Q1..FY27Q4, cell = meeting count, highlight `is_cxo=true`).
+     - Time series: Exec meeting cadence (count per month, separate lines for cxo / non-cxo).
+     - Gap panel (detail table): `ds_exec_meetings_gap` rows — "CXO touched, no work in flight." Most actionable panel on the dashboard for QBR prep.
+     - Cross-category tile: "Exec meetings tied to an initiative" count — measures whether internal work gets exec air time.
+- **Test design.**
+  - SQL unit (synthetic): 6 exec_meetings across 3 customers, 2 with `is_cxo=true` at the same customer → `distinct_cxos` = 2 (people), `distinct_accounts_with_cxo` = 1 (account); not double-counted.
+  - SQL unit: `ds_exec_meetings_gap` — customer with CXO meeting in last 180d and customer_engagement in last 180d → does NOT appear in gap panel; customer with CXO meeting and no engagement → appears.
+  - SQL unit: heatmap — Focus account with 0 exec_meetings appears as a row with all zero cells (not absent — strategist needs to see the gap).
+  - SQL unit: `customer_engagement` linkage via `exec_meetings.asq_id` matches when the ASQ is from `asq_uco`; orphan via `manual:<id>` requires a parallel join path — assert both paths populate `linked_customer_engagement_count`.
+  - SQL unit: cross-strategist tenancy.
+  - Dashboard build: 5 panels render; heatmap legend reads correctly (CXO highlighted).
+- **Success criteria.**
+  - Gap panel flags ≥3 accounts on launch (assuming Felix's portfolio has the typical CXO-without-engagement pattern). Each flagged account gets an action within 30 days (engagement created OR explicit "no action" annotation).
+  - Distinct CXO count matches manual SFDC pull ±1.
+  - At least one Focus account in the heatmap shows zero exec meetings for the last 2 quarters → triggers a planning conversation.
+- **Blast radius.** SQL only — 3 datasets + 1 page block. **Depends on T-216 + T-217.** Parallelisable with T-219 / T-221.
+
+### T-223 Dashboard page: Portfolio readiness (leading indicators)
+- **Problem.** Today's dashboard is 100% lagging — it tells you what happened, not what to do this week. The strategist's most valuable dashboard is one they open every Monday morning and act on. T-219/T-221/T-222 each have one leading-indicator tile, but the highest-density "what to do this week" view needs its own page — and the cross-table joins it requires (engagements ⋈ planning ⋈ exec_meetings ⋈ initiatives) only make sense once all four tables exist.
+- **Plan.**
+  1. Five new datasets (all return small row counts; the page is a worklist, not analytics):
+     - `ds_focus_without_plan` — Focus accounts with no `focused_account_planning` row in the last 90 days. Returns `customer`, `account_id`, `days_since_last_plan`, `ae`, `last_engagement_date`.
+     - `ds_focus_without_engagement` — Focus accounts with no customer_engagement in the current quarter. Same shape.
+     - `ds_open_asqs_without_next_steps` — Open ASQs (status ∈ Ongoing/Not started) with empty/null `next_steps` for ≥14 days. Tightly bounded — should be ≤10 rows or there's a hygiene problem.
+     - `ds_stalled_initiatives` — Initiatives with `last_activity_at` > 30 days ago and `status='active'`.
+     - `ds_oneoff_without_followup` — One-off engagements completed >90 days ago with no subsequent engagement or planning session at the same account.
+  2. New dashboard page **"Portfolio readiness"** (the "Monday morning" page). Panels:
+     - 5 KPI tiles, one per dataset, each showing the count + clicking opens the detail table beneath.
+     - 5 detail tables (one per dataset) below the tiles — Felix can scan all of them in under 2 minutes.
+     - Banner across the top: "Last refreshed: {timestamp}" — so it's obvious if the dashboard is showing stale data.
+- **Test design.**
+  - SQL unit (synthetic): Focus account with planning row 30d ago → does NOT appear in `ds_focus_without_plan`; 95d ago → appears.
+  - SQL unit: Light account with no planning → does NOT appear (panel is Focus-only).
+  - SQL unit: `ds_open_asqs_without_next_steps` — ASQ with `next_steps` containing only whitespace → counts as empty; with real text → does not appear.
+  - SQL unit: `ds_stalled_initiatives` — initiative with `status='on_hold'` and no activity for 60d → does NOT appear (on_hold is intentional, not stalled).
+  - SQL unit: `ds_oneoff_without_followup` — one-off completed 100d ago, followed by a Focus engagement at the same account → does NOT appear (any follow-up activity counts).
+  - SQL unit: edge — Focus account that's brand new (created <90d ago) and has no planning yet — currently appears. Decision: keep it; brand-new Focus *needs* a plan. Add `MIN(days_since_engagement_created, 90)` to the panel as a soft signal.
+  - Dashboard build: page loads in <3s (worklist must be snappy or it won't get checked weekly).
+- **Success criteria.**
+  - Felix opens this page ≥4 times in the first 14 days post-launch (instrument via Lakeview audit log query if available; otherwise self-report).
+  - ≥50% of items flagged in the first week get resolved or annotated within 14 days (the page must drive action, not just decoration).
+  - At least one item caught here saves a renewal conversation or surfaces a blocker before it becomes a problem — measured at end of FY26 retro.
+  - The page becomes the highest-traffic dashboard page within 30 days of launch.
+- **Blast radius.** SQL only — 5 datasets + 1 page block. **Depends on T-216 + T-217 + T-218 + T-204 (uco_ids).** Highest signal/effort ratio of the new pages — recommended priority right after T-212 lands.
+
+### T-224 Executive Summary v2: one tile per pillar
+- **Problem.** Today's "Executive Summary" page is six activity tiles for the customer category only (Total Accounts, Focus Accounts, One-off Engagements, Territories, AE Partners, Total Engagements). After T-219/T-221/T-222/T-223 land, the dashboard tells five stories — but the front page still tells one. Anyone (skip-level, peer strategist, exec sponsor) who opens the dashboard sees a misleadingly narrow summary that under-represents the strategist's portfolio by ~2/3.
+- **Plan.**
+  1. Rebuild the front page as five pillars, one tile-group per pillar, FY-filterable and strategist-filterable. The page should answer "what kind of strategist am I, and how am I doing this year" in under 30 seconds:
+     - **Customer impact**: Total influenced revenue (windowed — T-214), UCO advances FY (T-213), tagged outcomes count (T-212).
+     - **Evangelism reach**: Events delivered FY, Total reach (views + attendance), Planned next 30d.
+     - **Initiative outcomes**: Active initiatives, Completed FY, CXO-sponsored count.
+     - **Relationship depth**: Distinct CXOs FY, Accounts with CXO meeting FY, CXO meetings without follow-up engagement (gap).
+     - **Portfolio readiness**: Focus accounts without plan, Open ASQs needing attention, Stalled initiatives (sum of T-223 worklist counts).
+  2. Each tile-group is 3 KPIs + a sparkline (FY trend). Tile-group clicks deep-link to the corresponding pillar page (Page 2..6).
+  3. New dataset `ds_portfolio_pillars` that left-joins all five pillar aggregates by `(strategist_email, fy)`. Single query, not 5 — so the page loads as one widget.
+  4. Land **after** T-219/T-221/T-222/T-223 — needs the per-pillar datasets to exist so we don't duplicate aggregation logic.
+- **Test design.**
+  - SQL unit: `ds_portfolio_pillars` returns one row per (strategist_email, fy) with all 15 KPIs as columns. NULL handling: strategist with no evangelism rows still gets a row with `evangelism_count = 0`, not absent.
+  - SQL unit: deep-link URLs in tile-group config resolve to the right pillar page IDs.
+  - Visual: sparkline trends match the per-pillar page's headline number when filtered to the same FY.
+  - Manual: open Page 1, eyeball each KPI, click into the corresponding pillar page — assert the deep-linked page shows the same headline number.
+- **Success criteria.**
+  - Page 1 is the only page an exec needs to see — i.e., a non-strategist viewer can describe Felix's FY26 portfolio after 30 seconds on Page 1.
+  - The new tiles surface ≥2 narratives that the old Executive Summary hid (typical candidates: evangelism reach exceeds customer engagement count; relationship gap panel highlights a CXO-rich account with no active work).
+  - Felix replaces ≥3 hand-built portfolio slides with screenshots from Page 1.
+- **Blast radius.** SQL + dashboard layout — 1 new dataset + Page 1 rebuild. **Depends on T-219 + T-221 + T-222 + T-223** (and ideally T-212/T-213/T-214 for the customer-pillar tiles to be honest). The capstone task; ships last.
+
 ---
 
 ### T-205 Switch Databricks calls to OBO (On-Behalf-Of the logged-in user)
@@ -524,8 +683,8 @@ Landed in commits on `main`:
 - **Problem.** The cockpit's app-managed state is currently on UC Delta + DBSQL — a deliberately **interim** choice because Lakebase Autoscaling is not yet GA on Central Logfood. The target end-state is autoscaling Lakebase Postgres for the OLTP write path: scale-to-zero compute, branching, OLTP-grade write latency. UC Delta then becomes the analytic projection only.
 - **Plan.** When Lakebase Autoscaling is GA in logfood:
   1. Provision an autoscaling Lakebase instance `field_strategist_cockpit_oltp` in the workspace (configure scale-to-zero + branching).
-  2. Mirror the schemas of `engagements_manual`, `engagement_app_data`, `projects` into Postgres.
-  3. Cockpit writes flip from DBSQL Delta INSERT → Lakebase Postgres via SQLAlchemy / asyncpg. Reads of `v_engagements_unified` remain on the warehouse (analytics view).
+  2. Mirror the schemas of `customer_engagements_manual`, `customer_engagement_app_data`, `projects` into Postgres.
+  3. Cockpit writes flip from DBSQL Delta INSERT → Lakebase Postgres via SQLAlchemy / asyncpg. Reads of `v_customer_engagements_unified` remain on the warehouse (analytics view).
   4. Add a periodic Lakebase → UC reverse-sync job so the analytic projection in UC stays current for dashboards and Genie (per the migration doc's Step 4).
   5. Update SDR + design doc to reintroduce the App-SP credential for Lakebase writes (alongside OBO reads). The original design's hybrid auth model returns.
 - **Test / acceptance.** Latency on engagement edits drops to <100ms p99. Reverse-sync job is monitored. SDR re-review (lightweight — the future shape is already declared as goal end-state).
