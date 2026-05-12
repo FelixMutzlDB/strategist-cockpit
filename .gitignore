@@ -50,3 +50,6 @@ static/
 
 # Databricks CLI / MCP resource tracker (local state)
 .databricks-resources.json
+
+# Coordinator-managed git worktrees (per-task isolation)
+worktrees/
