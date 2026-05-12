@@ -804,6 +804,147 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-219 ---
+    ,
+    # --- T-222 relationship depth datasets ---
+    {
+      "name": "ds_exec_meetings_summary",
+      "displayName": "exec_meetings_summary",
+      "queryLines": [
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  CONCAT('FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0')) AS fy,\n",
+        "  COUNT(*) AS meetings_total,\n",
+        "  SUM(CASE WHEN is_cxo = TRUE THEN 1 ELSE 0 END) AS cxo_meetings,\n",
+        "  COUNT(DISTINCT CASE WHEN is_cxo = TRUE THEN CONCAT(COALESCE(account_id, ''), '|', COALESCE(exec_name, '')) END) AS distinct_cxos,\n",
+        "  COUNT(DISTINCT account_id) AS distinct_accounts,\n",
+        "  COUNT(DISTINCT CASE WHEN is_cxo = TRUE THEN account_id END) AS distinct_accounts_with_cxo,\n",
+        "  SUM(CASE WHEN initiative_id IS NOT NULL THEN 1 ELSE 0 END) AS meetings_tied_to_initiative,\n",
+        "  ROUND(try_divide(SUM(CASE WHEN is_cxo = TRUE THEN 1 ELSE 0 END), COUNT(*)) * 100, 1) AS cxo_pct\n",
+        "FROM main.field_strategist_cockpit.exec_meetings\n",
+        "WHERE strategist_email IS NOT NULL AND meeting_date IS NOT NULL\n",
+        "GROUP BY strategist_email, fy\n"
+      ]
+    },
+    {
+      "name": "ds_exec_meetings_per_account",
+      "displayName": "exec_meetings_per_account",
+      "queryLines": [
+        "-- One row per exec_meeting (carrying account-level aggregates via window functions),\n",
+        "-- PLUS one placeholder row per Focus account with no exec_meeting so the heatmap\n",
+        "-- renders a visible gap. Filter out placeholders for non-heatmap panels via is_placeholder = false.\n",
+        "WITH em AS (\n",
+        "  SELECT\n",
+        "    strategist_email, customer, account_id, exec_name, exec_title,\n",
+        "    COALESCE(is_cxo, FALSE) AS is_cxo,\n",
+        "    meeting_date, asq_id, evangelism_id, initiative_id,\n",
+        "    CONCAT('FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0')) AS fy,\n",
+        "    CONCAT(\n",
+        "      'FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0'),\n",
+        "      'Q', CAST(((MOD(MONTH(meeting_date) - 2 + 12, 12)) DIV 3) + 1 AS STRING)\n",
+        "    ) AS quarter,\n",
+        "    DATE_TRUNC('MONTH', meeting_date) AS meeting_month_start\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE strategist_email IS NOT NULL AND meeting_date IS NOT NULL\n",
+        "),\n",
+        "focus_accounts AS (\n",
+        "  SELECT DISTINCT src.strategist_email, src.customer, src.account_id\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "  WHERE src.strategist_email IS NOT NULL\n",
+        "    AND src.account_id IS NOT NULL\n",
+        "    AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') = 'Focus'\n",
+        "),\n",
+        "focus_zero AS (\n",
+        "  SELECT\n",
+        "    fa.strategist_email, fa.customer, fa.account_id,\n",
+        "    CAST(NULL AS STRING) AS exec_name,\n",
+        "    FALSE AS is_cxo,\n",
+        "    CAST(NULL AS DATE) AS meeting_date,\n",
+        "    CAST(NULL AS STRING) AS fy,\n",
+        "    CAST(NULL AS STRING) AS quarter,\n",
+        "    CAST(NULL AS TIMESTAMP) AS meeting_month_start,\n",
+        "    CAST(NULL AS BIGINT) AS initiative_id,\n",
+        "    CAST(NULL AS BIGINT) AS evangelism_id,\n",
+        "    CAST(NULL AS STRING) AS asq_id,\n",
+        "    TRUE AS is_focus,\n",
+        "    TRUE AS is_placeholder\n",
+        "  FROM focus_accounts fa\n",
+        "  LEFT ANTI JOIN em ON em.strategist_email = fa.strategist_email AND em.account_id = fa.account_id\n",
+        "),\n",
+        "meeting_rows AS (\n",
+        "  SELECT\n",
+        "    em.strategist_email, em.customer, em.account_id, em.exec_name, em.is_cxo,\n",
+        "    em.meeting_date, em.fy, em.quarter, em.meeting_month_start,\n",
+        "    em.initiative_id, em.evangelism_id, em.asq_id,\n",
+        "    CASE WHEN fa.account_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_focus,\n",
+        "    FALSE AS is_placeholder\n",
+        "  FROM em\n",
+        "  LEFT JOIN focus_accounts fa\n",
+        "    ON fa.strategist_email = em.strategist_email AND fa.account_id = em.account_id\n",
+        "),\n",
+        "combined AS (\n",
+        "  SELECT * FROM meeting_rows UNION ALL SELECT * FROM focus_zero\n",
+        ")\n",
+        "SELECT\n",
+        "  c.strategist_email,\n",
+        "  c.customer,\n",
+        "  c.account_id,\n",
+        "  c.exec_name,\n",
+        "  c.is_cxo,\n",
+        "  c.is_focus,\n",
+        "  c.is_placeholder,\n",
+        "  c.meeting_date,\n",
+        "  c.fy,\n",
+        "  c.quarter,\n",
+        "  c.meeting_month_start,\n",
+        "  CASE WHEN c.is_cxo THEN 'CXO' ELSE 'Non-CXO' END AS cxo_label,\n",
+        "  c.initiative_id, c.evangelism_id, c.asq_id,\n",
+        "  SUM(CASE WHEN c.is_placeholder THEN 0 ELSE 1 END) OVER (PARTITION BY c.strategist_email, c.account_id) AS total_meetings,\n",
+        "  SUM(CASE WHEN c.is_placeholder THEN 0 WHEN c.is_cxo THEN 1 ELSE 0 END) OVER (PARTITION BY c.strategist_email, c.account_id) AS cxo_meetings,\n",
+        "  MAX(c.meeting_date) OVER (PARTITION BY c.strategist_email, c.account_id) AS last_meeting_date,\n",
+        "  SUM(CASE WHEN c.is_placeholder THEN 0 WHEN c.initiative_id IS NOT NULL THEN 1 ELSE 0 END) OVER (PARTITION BY c.strategist_email, c.account_id) AS linked_initiative_count,\n",
+        "  SUM(CASE WHEN c.is_placeholder THEN 0 WHEN c.evangelism_id IS NOT NULL THEN 1 ELSE 0 END) OVER (PARTITION BY c.strategist_email, c.account_id) AS linked_evangelism_count\n",
+        "FROM combined c\n",
+        "ORDER BY c.account_id, c.meeting_date\n"
+      ]
+    },
+    {
+      "name": "ds_exec_meetings_gap",
+      "displayName": "exec_meetings_gap",
+      "queryLines": [
+        "-- Accounts with a CXO exec_meeting in the last 180d AND no customer_engagement\n",
+        "-- (any ASQ_Start_Date) in the same 180d window. The 'we have the relationship but\n",
+        "-- no work in flight' panel — most actionable view for QBR prep.\n",
+        "WITH cxo_recent AS (\n",
+        "  SELECT\n",
+        "    strategist_email, customer, account_id,\n",
+        "    MAX(meeting_date) AS last_cxo_meeting_date\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "    AND account_id IS NOT NULL\n",
+        "    AND is_cxo = TRUE\n",
+        "    AND meeting_date >= DATE_SUB(current_date(), 180)\n",
+        "  GROUP BY strategist_email, customer, account_id\n",
+        "),\n",
+        "eng_recent AS (\n",
+        "  SELECT DISTINCT src.strategist_email, src.account_id\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "  WHERE src.strategist_email IS NOT NULL\n",
+        "    AND src.account_id IS NOT NULL\n",
+        "    AND src.ASQ_Start_Date >= DATE_SUB(current_date(), 180)\n",
+        ")\n",
+        "SELECT\n",
+        "  c.strategist_email,\n",
+        "  c.customer,\n",
+        "  c.account_id,\n",
+        "  c.last_cxo_meeting_date,\n",
+        "  DATEDIFF(current_date(), c.last_cxo_meeting_date) AS days_since_engagement\n",
+        "FROM cxo_recent c\n",
+        "LEFT ANTI JOIN eng_recent e\n",
+        "  ON e.strategist_email = c.strategist_email AND e.account_id = c.account_id\n",
+        "ORDER BY c.last_cxo_meeting_date DESC\n"
+      ]
+    }
+    # --- end T-222 ---
   ],
   "pages": [
     {
@@ -3888,6 +4029,323 @@ SERIALIZED_DASHBOARD: dict = {
       "pageType": "PAGE_TYPE_CANVAS"
     }
     # --- end T-219 ---
+    ,
+    # --- T-222 relationship depth page ---
+    {
+      "name": "p_relationship_depth",
+      "displayName": "Relationship depth",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_relationship_depth",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Relationship depth\n",
+                "\n",
+                "How many CXOs we engage, how often, across how many accounts — the strategist's job at any senior account. ",
+                "Gap panel flags accounts where we've touched a CXO recently but have no customer engagement in flight (QBR prep view)."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 6, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_distinct_cxos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_summary",
+                  "fields": [
+                    {"name": "sum(distinct_cxos)", "expression": "SUM(`distinct_cxos`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(distinct_cxos)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Distinct CXOs (FY)",
+                "showDescription": True,
+                "description": "Unique CXO people per account in FY"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_accounts_with_cxo",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_summary",
+                  "fields": [
+                    {"name": "sum(distinct_accounts_with_cxo)", "expression": "SUM(`distinct_accounts_with_cxo`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(distinct_accounts_with_cxo)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Accounts with CXO (FY)",
+                "showDescription": True,
+                "description": "Distinct accounts with any CXO meeting"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_total_exec_meetings",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_summary",
+                  "fields": [
+                    {"name": "sum(meetings_total)", "expression": "SUM(`meetings_total`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(meetings_total)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Total exec meetings (FY)",
+                "showDescription": True,
+                "description": "All exec meetings in FY"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_cxo_pct",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_summary",
+                  "fields": [
+                    {"name": "avg(cxo_pct)", "expression": "AVG(`cxo_pct`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(cxo_pct)",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {"type": "exact", "places": 1}
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "CXO %",
+                "showDescription": True,
+                "description": "cxo_meetings / total"
+              }
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_meetings_tied_to_initiative",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_summary",
+                  "fields": [
+                    {"name": "sum(meetings_tied_to_initiative)", "expression": "SUM(`meetings_tied_to_initiative`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(meetings_tied_to_initiative)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Meetings tied to an initiative",
+                "showDescription": True,
+                "description": "Cross-category — exec meetings with initiative_id set"
+              }
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 2, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "heatmap_focus_account_quarter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_per_account",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "quarter", "expression": "`quarter`"},
+                    {"name": "sum(non_placeholder)", "expression": "SUM(CASE WHEN `is_placeholder` THEN 0 ELSE 1 END)"},
+                    {"name": "sum(cxo_flag)", "expression": "SUM(CASE WHEN `is_placeholder` THEN 0 WHEN `is_cxo` THEN 1 ELSE 0 END)"}
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`is_focus` = true"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "quarter",
+                  "scale": {"type": "categorical"},
+                  "displayName": "Quarter"
+                },
+                "y": {
+                  "fieldName": "customer",
+                  "scale": {"type": "categorical"},
+                  "displayName": "Focus account"
+                },
+                "color": {
+                  "fieldName": "sum(non_placeholder)",
+                  "scale": {"type": "quantitative"},
+                  "displayName": "Meetings (CXO highlighted via overlay)",
+                  "legend": {"position": "bottom"}
+                },
+                "label": {"show": True}
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Exec meetings per Focus account × quarter (cell = meeting count; CXO count overlaid)"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 4, "width": 6, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "timeseries_cxo_cadence",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_per_account",
+                  "fields": [
+                    {"name": "meeting_month_start", "expression": "`meeting_month_start`"},
+                    {"name": "cxo_label", "expression": "`cxo_label`"},
+                    {"name": "count(meeting)", "expression": "SUM(CASE WHEN `is_placeholder` THEN 0 ELSE 1 END)"}
+                  ],
+                  "filters": [
+                    {"expression": "`is_placeholder` = false"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "meeting_month_start",
+                  "scale": {"type": "temporal"},
+                  "displayName": "Month"
+                },
+                "y": {
+                  "fieldName": "count(meeting)",
+                  "scale": {"type": "quantitative"},
+                  "displayName": "Meetings"
+                },
+                "color": {
+                  "fieldName": "cxo_label",
+                  "scale": {"type": "categorical"},
+                  "legend": {"position": "bottom"}
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Exec meeting cadence (CXO vs non-CXO, per month)"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_relationship_gap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_exec_meetings_gap",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "account_id", "expression": "`account_id`"},
+                    {"name": "last_cxo_meeting_date", "expression": "`last_cxo_meeting_date`"},
+                    {"name": "days_since_engagement", "expression": "`days_since_engagement`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pivot",
+              "encodings": {
+                "rows": [
+                  {"fieldName": "customer"},
+                  {"fieldName": "account_id"},
+                  {"fieldName": "last_cxo_meeting_date"},
+                  {"fieldName": "days_since_engagement"}
+                ],
+                "columns": [],
+                "cell": {"type": "multi-cell", "fields": []}
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Gap: CXO touched in last 180d, no customer engagement in same window"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 17, "width": 6, "height": 6}
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+    # --- end T-222 ---
   ]
 }
 
