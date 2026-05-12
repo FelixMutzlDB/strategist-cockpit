@@ -1195,6 +1195,248 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-221 ---
+    ,
+    # --- T-223 portfolio readiness datasets ---
+    # Five "Monday morning worklist" datasets. Each returns a small row count
+    # (the page is a worklist, not analytics). All tenancy-filtered by
+    # strategist_email everywhere. focused_account_planning + initiatives are
+    # empty until T-217 --apply lands; the queries still parse + return zero
+    # rows in that interim state.
+    {
+      "name": "ds_focus_without_plan",
+      "displayName": "focus_without_plan",
+      "queryLines": [
+        "-- T-223: Focus accounts with no focused_account_planning row in the\n",
+        "-- last 90 days. Focus-only by design (Light/non-Focus do NOT appear).\n",
+        "-- Brand-new Focus engagements (<90d old) intentionally surface — they\n",
+        "-- need a plan. days_since_engagement_created is a soft signal capped\n",
+        "-- at 90 so the column reads sensibly even for older accounts.\n",
+        "WITH focus_eng AS (\n",
+        "  SELECT\n",
+        "    e.strategist_email,\n",
+        "    e.customer,\n",
+        "    e.account_id,\n",
+        "    COALESCE(e.account_executive, e.ae_snapshot) AS ae,\n",
+        "    MAX(e.ASQ_Start_Date) AS last_engagement_date,\n",
+        "    MIN(e.ASQ_Start_Date) AS first_engagement_date\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "  WHERE e.strategist_email IS NOT NULL\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(e.engagement_type, '')), '[\\r\\n]', ''), '') = 'Focus'\n",
+        "  GROUP BY e.strategist_email, e.customer, e.account_id, COALESCE(e.account_executive, e.ae_snapshot)\n",
+        "),\n",
+        "last_plan AS (\n",
+        "  -- Most-recent planning session per (strategist, account), regardless of\n",
+        "  -- age. Used to compute days_since_last_plan; NULL when no plan ever.\n",
+        "  SELECT\n",
+        "    strategist_email,\n",
+        "    account_id,\n",
+        "    MAX(session_date) AS last_plan_date\n",
+        "  FROM main.field_strategist_cockpit.focused_account_planning\n",
+        "  WHERE strategist_email IS NOT NULL AND account_id IS NOT NULL\n",
+        "  GROUP BY strategist_email, account_id\n",
+        "),\n",
+        "recent_plans AS (\n",
+        "  SELECT DISTINCT strategist_email, account_id\n",
+        "  FROM main.field_strategist_cockpit.focused_account_planning\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "    AND account_id IS NOT NULL\n",
+        "    AND session_date >= DATE_SUB(current_date(), 90)\n",
+        ")\n",
+        "SELECT\n",
+        "  f.strategist_email,\n",
+        "  f.customer,\n",
+        "  f.account_id,\n",
+        "  f.ae,\n",
+        "  f.last_engagement_date,\n",
+        "  CASE WHEN lp.last_plan_date IS NOT NULL\n",
+        "       THEN DATEDIFF(current_date(), lp.last_plan_date) END AS days_since_last_plan,\n",
+        "  LEAST(COALESCE(DATEDIFF(current_date(), f.first_engagement_date), 90), 90) AS days_since_engagement_created\n",
+        "FROM focus_eng f\n",
+        "LEFT JOIN last_plan lp\n",
+        "  ON lp.strategist_email = f.strategist_email AND lp.account_id = f.account_id\n",
+        "LEFT ANTI JOIN recent_plans rp\n",
+        "  ON rp.strategist_email = f.strategist_email AND rp.account_id = f.account_id\n",
+        "ORDER BY f.last_engagement_date DESC NULLS LAST\n"
+      ]
+    },
+    {
+      "name": "ds_focus_without_engagement",
+      "displayName": "focus_without_engagement",
+      "queryLines": [
+        "-- T-223: Focus accounts with no customer_engagement in the current\n",
+        "-- fiscal quarter. FY runs Feb->Jan: quarter = ((MONTH - 2 + 12) % 12) / 3 + 1.\n",
+        "-- Quarter strings are normalised (strip dashes/whitespace) since source\n",
+        "-- data has both 'FY26-Q1' and 'FY26Q1' forms.\n",
+        "WITH current_fq AS (\n",
+        "  SELECT\n",
+        "    CONCAT(\n",
+        "      'FY', LPAD(MOD(CASE WHEN MONTH(current_date()) >= 2 THEN YEAR(current_date()) + 1 ELSE YEAR(current_date()) END, 100), 2, '0'),\n",
+        "      'Q', CAST(((MOD(MONTH(current_date()) - 2 + 12, 12)) DIV 3) + 1 AS STRING)\n",
+        "    ) AS cq\n",
+        "),\n",
+        "focus_accounts AS (\n",
+        "  SELECT\n",
+        "    e.strategist_email,\n",
+        "    e.customer,\n",
+        "    e.account_id,\n",
+        "    MAX(COALESCE(e.account_executive, e.ae_snapshot)) AS ae,\n",
+        "    MAX(e.ASQ_Start_Date) AS last_engagement_date\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "  WHERE e.strategist_email IS NOT NULL\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(e.engagement_type, '')), '[\\r\\n]', ''), '') = 'Focus'\n",
+        "  GROUP BY e.strategist_email, e.customer, e.account_id\n",
+        "),\n",
+        "engagements_in_current_q AS (\n",
+        "  SELECT DISTINCT\n",
+        "    e.strategist_email,\n",
+        "    e.account_id\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "  CROSS JOIN current_fq cfq\n",
+        "  WHERE e.strategist_email IS NOT NULL\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(e.quarter, '')), '-', ''), '[\\r\\n]', ''), '') = cfq.cq\n",
+        ")\n",
+        "SELECT\n",
+        "  f.strategist_email,\n",
+        "  f.customer,\n",
+        "  f.account_id,\n",
+        "  f.ae,\n",
+        "  f.last_engagement_date,\n",
+        "  DATEDIFF(current_date(), f.last_engagement_date) AS days_since_last_engagement\n",
+        "FROM focus_accounts f\n",
+        "LEFT ANTI JOIN engagements_in_current_q c\n",
+        "  ON c.strategist_email = f.strategist_email AND c.account_id = f.account_id\n",
+        "ORDER BY f.last_engagement_date DESC NULLS LAST\n"
+      ]
+    },
+    {
+      "name": "ds_open_asqs_without_next_steps",
+      "displayName": "open_asqs_without_next_steps",
+      "queryLines": [
+        "-- T-223: Open ASQs with empty/null next_steps for >=14 days. 'Open' here\n",
+        "-- is engagement_status IN ('In Progress','New','Approved') (the actual\n",
+        "-- enum in v_customer_engagements_unified — see DESCRIBE). Whitespace-only\n",
+        "-- next_steps counts as empty. Tightly bounded — expected <=10 rows; more\n",
+        "-- means hygiene problem.\n",
+        "SELECT\n",
+        "  e.strategist_email,\n",
+        "  e.customer,\n",
+        "  e.account_id,\n",
+        "  COALESCE(e.account_executive, e.ae_snapshot) AS ae,\n",
+        "  e.asq_id,\n",
+        "  e.engagement_title,\n",
+        "  e.engagement_status,\n",
+        "  e.ASQ_Start_Date,\n",
+        "  DATEDIFF(current_date(), e.ASQ_Start_Date) AS days_since_start,\n",
+        "  e.asq_url\n",
+        "FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "WHERE e.strategist_email IS NOT NULL\n",
+        "  AND e.engagement_status IN ('In Progress', 'New', 'Approved')\n",
+        "  AND (e.next_steps IS NULL OR LENGTH(TRIM(e.next_steps)) = 0)\n",
+        "  AND e.ASQ_Start_Date IS NOT NULL\n",
+        "  AND DATEDIFF(current_date(), e.ASQ_Start_Date) >= 14\n",
+        "ORDER BY days_since_start DESC\n"
+      ]
+    },
+    {
+      "name": "ds_stalled_initiatives",
+      "displayName": "stalled_initiatives",
+      "queryLines": [
+        "-- T-223: Initiatives with last_activity_at > 30d ago AND status='active'.\n",
+        "-- on_hold / paused are INTENTIONAL pauses, not stalled — excluded.\n",
+        "-- Case-insensitive match on status to absorb 'Active' vs 'active'.\n",
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  id AS initiative_id,\n",
+        "  name,\n",
+        "  status,\n",
+        "  fy,\n",
+        "  feip_ticket,\n",
+        "  next_steps,\n",
+        "  last_activity_at,\n",
+        "  DATEDIFF(current_date(), CAST(last_activity_at AS DATE)) AS days_since_last_activity\n",
+        "FROM main.field_strategist_cockpit.initiatives\n",
+        "WHERE strategist_email IS NOT NULL\n",
+        "  AND LOWER(COALESCE(status, '')) = 'active'\n",
+        "  AND last_activity_at IS NOT NULL\n",
+        "  AND last_activity_at < DATE_SUB(current_date(), 30)\n",
+        "ORDER BY last_activity_at ASC\n"
+      ]
+    },
+    {
+      "name": "ds_oneoff_without_followup",
+      "displayName": "oneoff_without_followup",
+      "queryLines": [
+        "-- T-223: One-off engagements completed >90d ago with no subsequent\n",
+        "-- engagement (Focus or one-off) OR planning session at the same account\n",
+        "-- after the one-off's end date. ANY follow-up activity counts as a\n",
+        "-- follow-up — the panel surfaces 'true orphans'. Completion uses end_date\n",
+        "-- if set, else ASQ_Start_Date (manual orphans rarely have end_date).\n",
+        "WITH oneoff AS (\n",
+        "  SELECT\n",
+        "    e.strategist_email,\n",
+        "    e.customer,\n",
+        "    e.account_id,\n",
+        "    COALESCE(e.account_executive, e.ae_snapshot) AS ae,\n",
+        "    e.asq_id,\n",
+        "    e.engagement_title,\n",
+        "    COALESCE(e.end_date, e.ASQ_Start_Date) AS completed_on\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "  WHERE e.strategist_email IS NOT NULL\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(e.engagement_type, '')), '[\\r\\n]', ''), '') = 'One-off'\n",
+        "    AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(e.engagement_status, '')), '[\\r\\n]', ''), '') = 'Complete'\n",
+        "    AND COALESCE(e.end_date, e.ASQ_Start_Date) IS NOT NULL\n",
+        "    AND COALESCE(e.end_date, e.ASQ_Start_Date) < DATE_SUB(current_date(), 90)\n",
+        "),\n",
+        "followup_eng AS (\n",
+        "  SELECT\n",
+        "    e.strategist_email,\n",
+        "    e.account_id,\n",
+        "    e.ASQ_Start_Date AS followup_date,\n",
+        "    COALESCE(e.asq_id, '') AS followup_id\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "  WHERE e.strategist_email IS NOT NULL\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND e.ASQ_Start_Date IS NOT NULL\n",
+        "),\n",
+        "followup_plan AS (\n",
+        "  SELECT\n",
+        "    p.strategist_email,\n",
+        "    p.account_id,\n",
+        "    p.session_date AS followup_date,\n",
+        "    CONCAT('plan_', CAST(p.id AS STRING)) AS followup_id\n",
+        "  FROM main.field_strategist_cockpit.focused_account_planning p\n",
+        "  WHERE p.strategist_email IS NOT NULL\n",
+        "    AND p.account_id IS NOT NULL\n",
+        "    AND p.session_date IS NOT NULL\n",
+        "),\n",
+        "followups AS (\n",
+        "  SELECT strategist_email, account_id, followup_date, followup_id FROM followup_eng\n",
+        "  UNION ALL\n",
+        "  SELECT strategist_email, account_id, followup_date, followup_id FROM followup_plan\n",
+        ")\n",
+        "SELECT\n",
+        "  o.strategist_email,\n",
+        "  o.customer,\n",
+        "  o.account_id,\n",
+        "  o.ae,\n",
+        "  o.asq_id,\n",
+        "  o.engagement_title,\n",
+        "  o.completed_on,\n",
+        "  DATEDIFF(current_date(), o.completed_on) AS days_since_completed\n",
+        "FROM oneoff o\n",
+        "LEFT ANTI JOIN followups f\n",
+        "  ON f.strategist_email = o.strategist_email\n",
+        " AND f.account_id = o.account_id\n",
+        " AND f.followup_id <> COALESCE(o.asq_id, '')\n",
+        " AND f.followup_date > o.completed_on\n",
+        "ORDER BY o.completed_on DESC\n"
+      ]
+    }
+    # --- end T-223 ---
   ],
   "pages": [
     {
@@ -5469,6 +5711,421 @@ SERIALIZED_DASHBOARD: dict = {
       "pageType": "PAGE_TYPE_CANVAS"
     }
     # --- end T-221 ---
+    ,
+    # --- T-223 portfolio readiness page ---
+    # Monday-morning worklist: 5 KPI tiles at the top, 5 detail tables below.
+    # Each KPI counts rows in its dataset; the matching table renders the
+    # actionable detail. Banner uses now() so the strategist knows when the
+    # cache was last refreshed.
+    {
+      "name": "p_portfolio_readiness",
+      "displayName": "Portfolio readiness",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_portfolio_readiness",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Portfolio readiness — Monday morning worklist\n",
+                "\n",
+                "Leading indicators across the portfolio. Each tile is a count of items that need attention; click through to the detail table below. ",
+                "If anything is in red, it's drift — Focus account with no plan, Open ASQ with no next steps, stalled initiative, one-off without follow-up.\n",
+                "\n",
+                "_Five tiles. Five tables. Two minutes._"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 6, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "header_last_refreshed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio",
+                  "fields": [
+                    {"name": "now()", "expression": "NOW()"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "now()"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Last refreshed",
+                "showDescription": True,
+                "description": "Dashboard cache refresh timestamp"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 6, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_focus_without_plan",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_without_plan",
+                  "fields": [
+                    {"name": "count(*)", "expression": "COUNT(`account_id`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "count(*)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Focus accounts without plan",
+                "showDescription": True,
+                "description": "No planning session in last 90d"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_focus_without_engagement",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_without_engagement",
+                  "fields": [
+                    {"name": "count(*)", "expression": "COUNT(`account_id`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "count(*)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Focus without engagement",
+                "showDescription": True,
+                "description": "No customer_engagement this FQ"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_open_asqs_no_next_steps",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_open_asqs_without_next_steps",
+                  "fields": [
+                    {"name": "count(*)", "expression": "COUNT(`asq_id`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "count(*)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Open ASQs w/o next steps",
+                "showDescription": True,
+                "description": "Open ASQ + empty next_steps >=14d"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_stalled_initiatives",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_stalled_initiatives",
+                  "fields": [
+                    {"name": "count(*)", "expression": "COUNT(`initiative_id`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "count(*)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Stalled initiatives",
+                "showDescription": True,
+                "description": "status=active, no activity 30d+"
+              }
+            }
+          },
+          "position": {"x": 3, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_oneoff_without_followup",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_oneoff_without_followup",
+                  "fields": [
+                    {"name": "count(*)", "expression": "COUNT(`asq_id`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "count(*)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "One-offs without follow-up",
+                "showDescription": True,
+                "description": "Completed >90d ago, no follow-up"
+              }
+            }
+          },
+          "position": {"x": 4, "y": 3, "width": 2, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "tbl_focus_without_plan",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_without_plan",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "account_id", "expression": "`account_id`"},
+                    {"name": "ae", "expression": "`ae`"},
+                    {"name": "last_engagement_date", "expression": "`last_engagement_date`"},
+                    {"name": "days_since_last_plan", "expression": "`days_since_last_plan`"},
+                    {"name": "days_since_engagement_created", "expression": "`days_since_engagement_created`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "customer", "displayName": "Customer", "type": "string"},
+                  {"fieldName": "account_id", "displayName": "Account ID", "type": "string"},
+                  {"fieldName": "ae", "displayName": "AE", "type": "string"},
+                  {"fieldName": "last_engagement_date", "displayName": "Last engagement", "type": "date"},
+                  {"fieldName": "days_since_last_plan", "displayName": "Days since last plan", "type": "integer"},
+                  {"fieldName": "days_since_engagement_created", "displayName": "Engagement age (capped 90)", "type": "integer"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Focus accounts without a planning session in the last 90 days"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_focus_without_engagement",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_focus_without_engagement",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "account_id", "expression": "`account_id`"},
+                    {"name": "ae", "expression": "`ae`"},
+                    {"name": "last_engagement_date", "expression": "`last_engagement_date`"},
+                    {"name": "days_since_last_engagement", "expression": "`days_since_last_engagement`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "customer", "displayName": "Customer", "type": "string"},
+                  {"fieldName": "account_id", "displayName": "Account ID", "type": "string"},
+                  {"fieldName": "ae", "displayName": "AE", "type": "string"},
+                  {"fieldName": "last_engagement_date", "displayName": "Last engagement", "type": "date"},
+                  {"fieldName": "days_since_last_engagement", "displayName": "Days since last", "type": "integer"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Focus accounts with no customer_engagement this fiscal quarter"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_open_asqs_no_next_steps",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_open_asqs_without_next_steps",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "asq_id", "expression": "`asq_id`"},
+                    {"name": "engagement_title", "expression": "`engagement_title`"},
+                    {"name": "engagement_status", "expression": "`engagement_status`"},
+                    {"name": "ae", "expression": "`ae`"},
+                    {"name": "ASQ_Start_Date", "expression": "`ASQ_Start_Date`"},
+                    {"name": "days_since_start", "expression": "`days_since_start`"},
+                    {"name": "asq_url", "expression": "`asq_url`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "customer", "displayName": "Customer", "type": "string"},
+                  {"fieldName": "asq_id", "displayName": "ASQ", "type": "string"},
+                  {"fieldName": "engagement_title", "displayName": "Title", "type": "string"},
+                  {"fieldName": "engagement_status", "displayName": "Status", "type": "string"},
+                  {"fieldName": "ae", "displayName": "AE", "type": "string"},
+                  {"fieldName": "ASQ_Start_Date", "displayName": "Started", "type": "date"},
+                  {"fieldName": "days_since_start", "displayName": "Days since start", "type": "integer"},
+                  {"fieldName": "asq_url", "displayName": "Open in SFDC", "type": "string"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Open ASQs with empty next_steps for >=14 days"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 17, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_stalled_initiatives",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_stalled_initiatives",
+                  "fields": [
+                    {"name": "name", "expression": "`name`"},
+                    {"name": "status", "expression": "`status`"},
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "feip_ticket", "expression": "`feip_ticket`"},
+                    {"name": "last_activity_at", "expression": "`last_activity_at`"},
+                    {"name": "days_since_last_activity", "expression": "`days_since_last_activity`"},
+                    {"name": "next_steps", "expression": "`next_steps`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "name", "displayName": "Initiative", "type": "string"},
+                  {"fieldName": "status", "displayName": "Status", "type": "string"},
+                  {"fieldName": "fy", "displayName": "FY", "type": "string"},
+                  {"fieldName": "feip_ticket", "displayName": "FEIP", "type": "string"},
+                  {"fieldName": "last_activity_at", "displayName": "Last activity", "type": "datetime"},
+                  {"fieldName": "days_since_last_activity", "displayName": "Days since", "type": "integer"},
+                  {"fieldName": "next_steps", "displayName": "Next steps", "type": "string"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Active initiatives with no activity for 30+ days"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 23, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_oneoff_without_followup",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_oneoff_without_followup",
+                  "fields": [
+                    {"name": "customer", "expression": "`customer`"},
+                    {"name": "account_id", "expression": "`account_id`"},
+                    {"name": "asq_id", "expression": "`asq_id`"},
+                    {"name": "engagement_title", "expression": "`engagement_title`"},
+                    {"name": "ae", "expression": "`ae`"},
+                    {"name": "completed_on", "expression": "`completed_on`"},
+                    {"name": "days_since_completed", "expression": "`days_since_completed`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "customer", "displayName": "Customer", "type": "string"},
+                  {"fieldName": "account_id", "displayName": "Account ID", "type": "string"},
+                  {"fieldName": "asq_id", "displayName": "ASQ", "type": "string"},
+                  {"fieldName": "engagement_title", "displayName": "Title", "type": "string"},
+                  {"fieldName": "ae", "displayName": "AE", "type": "string"},
+                  {"fieldName": "completed_on", "displayName": "Completed", "type": "date"},
+                  {"fieldName": "days_since_completed", "displayName": "Days since", "type": "integer"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "One-offs completed >90d ago with no follow-up engagement or planning"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 29, "width": 6, "height": 6}
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+    # --- end T-223 ---
   ]
 }
 
