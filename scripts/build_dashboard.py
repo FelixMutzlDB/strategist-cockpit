@@ -1070,6 +1070,131 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-212 ---
+    ,
+    # --- T-221 initiative outcomes datasets ---
+    # FY x status aggregate over `initiatives`. `last_activity_at` per row is the
+    # max of i.last_activity_at and the latest exec_meetings.updated_at linked
+    # via initiative_id — so an exec meeting against the initiative counts as
+    # activity even if the initiative row itself wasn't touched. Stalled count
+    # is materialised here so the KPI tile can SUM across rows that match the
+    # active strategist_email / fy filter (threshold 30 days; on_hold + paused
+    # are intentional pauses and NEVER count as stalled).
+    {
+      "name": "ds_initiatives_status",
+      "displayName": "initiatives_status",
+      "queryLines": [
+        "WITH em_activity AS (\n",
+        "  SELECT initiative_id, MAX(updated_at) AS em_last_updated\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE initiative_id IS NOT NULL\n",
+        "  GROUP BY initiative_id\n",
+        "),\n",
+        "initiative_activity AS (\n",
+        "  SELECT\n",
+        "    i.strategist_email,\n",
+        "    i.fy,\n",
+        "    i.status,\n",
+        "    i.id AS initiative_id,\n",
+        "    GREATEST(\n",
+        "      COALESCE(i.last_activity_at, i.updated_at, i.created_at),\n",
+        "      COALESCE(em.em_last_updated, CAST('1900-01-01' AS TIMESTAMP))\n",
+        "    ) AS row_last_activity_at\n",
+        "  FROM main.field_strategist_cockpit.initiatives i\n",
+        "  LEFT JOIN em_activity em ON em.initiative_id = i.id\n",
+        "  WHERE i.strategist_email IS NOT NULL\n",
+        ")\n",
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  fy,\n",
+        "  status,\n",
+        "  COUNT(*) AS initiatives_count,\n",
+        "  MAX(row_last_activity_at) AS last_activity_at,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN status = 'active'\n",
+        "       AND row_last_activity_at IS NOT NULL\n",
+        "       AND DATEDIFF(current_date(), CAST(row_last_activity_at AS DATE)) > 30\n",
+        "      THEN 1 ELSE 0\n",
+        "    END\n",
+        "  ) AS stalled_count,\n",
+        "  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_count,\n",
+        "  SUM(CASE WHEN status = 'complete' THEN 1 ELSE 0 END) AS complete_count,\n",
+        "  SUM(CASE WHEN status = 'on_hold' THEN 1 ELSE 0 END) AS on_hold_count,\n",
+        "  SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) AS paused_count\n",
+        "FROM initiative_activity\n",
+        "GROUP BY strategist_email, fy, status\n",
+        "ORDER BY strategist_email, fy, status\n"
+      ]
+    },
+    # Initiative-level detail. One row per initiative. `linked_exec_meeting_count`
+    # is the COUNT of exec_meetings.initiative_id = i.id (always integer, 0 when
+    # no linkage — never NULL). `linked_customer_engagement_count` is the
+    # *practical proxy* the spec calls for: exec_meetings rows with BOTH
+    # initiative_id AND asq_id set (i.e. an exec meeting that ties the
+    # initiative to an ASQ). The unified engagements view does not currently
+    # carry initiative_id, so direct join is not possible — flagged in
+    # `docs/tasks/todo.md` T-221 as a known proxy. `has_cxo_sponsorship`
+    # flips TRUE when ≥1 linked exec_meeting has is_cxo=true.
+    {
+      "name": "ds_initiatives_with_links",
+      "displayName": "initiatives_with_links",
+      "queryLines": [
+        "WITH em_per_initiative AS (\n",
+        "  SELECT\n",
+        "    initiative_id,\n",
+        "    COUNT(*) AS exec_meeting_count,\n",
+        "    SUM(CASE WHEN asq_id IS NOT NULL THEN 1 ELSE 0 END) AS linked_customer_engagement_count,\n",
+        "    SUM(CASE WHEN is_cxo = TRUE THEN 1 ELSE 0 END) AS cxo_meeting_count,\n",
+        "    MAX(updated_at) AS em_last_updated\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE initiative_id IS NOT NULL\n",
+        "  GROUP BY initiative_id\n",
+        ")\n",
+        "SELECT\n",
+        "  i.strategist_email,\n",
+        "  i.id AS initiative_id,\n",
+        "  i.name,\n",
+        "  i.feip_ticket,\n",
+        "  i.status,\n",
+        "  i.fy,\n",
+        "  i.actionable_outcome,\n",
+        "  COALESCE(em.exec_meeting_count, 0) AS linked_exec_meeting_count,\n",
+        "  COALESCE(em.linked_customer_engagement_count, 0) AS linked_customer_engagement_count,\n",
+        "  COALESCE(em.cxo_meeting_count, 0) AS cxo_meeting_count,\n",
+        "  CASE WHEN COALESCE(em.cxo_meeting_count, 0) > 0 THEN TRUE ELSE FALSE END AS has_cxo_sponsorship,\n",
+        "  GREATEST(\n",
+        "    COALESCE(i.last_activity_at, i.updated_at, i.created_at),\n",
+        "    COALESCE(em.em_last_updated, CAST('1900-01-01' AS TIMESTAMP))\n",
+        "  ) AS last_activity_at,\n",
+        "  DATEDIFF(\n",
+        "    current_date(),\n",
+        "    CAST(\n",
+        "      GREATEST(\n",
+        "        COALESCE(i.last_activity_at, i.updated_at, i.created_at),\n",
+        "        COALESCE(em.em_last_updated, CAST('1900-01-01' AS TIMESTAMP))\n",
+        "      ) AS DATE\n",
+        "    )\n",
+        "  ) AS days_since_last_activity,\n",
+        "  CASE\n",
+        "    WHEN i.status = 'active'\n",
+        "     AND DATEDIFF(\n",
+        "           current_date(),\n",
+        "           CAST(\n",
+        "             GREATEST(\n",
+        "               COALESCE(i.last_activity_at, i.updated_at, i.created_at),\n",
+        "               COALESCE(em.em_last_updated, CAST('1900-01-01' AS TIMESTAMP))\n",
+        "             ) AS DATE\n",
+        "           )\n",
+        "         ) > 30\n",
+        "    THEN TRUE ELSE FALSE\n",
+        "  END AS is_stalled\n",
+        "FROM main.field_strategist_cockpit.initiatives i\n",
+        "LEFT JOIN em_per_initiative em ON em.initiative_id = i.id\n",
+        "WHERE i.strategist_email IS NOT NULL\n",
+        "ORDER BY i.fy DESC, i.status, i.name\n"
+      ]
+    }
+    # --- end T-221 ---
   ],
   "pages": [
     {
@@ -4976,6 +5101,374 @@ SERIALIZED_DASHBOARD: dict = {
       "pageType": "PAGE_TYPE_CANVAS"
     }
     # --- end T-222 ---
+    ,
+    # --- T-221 initiative outcomes page ---
+    # Appended at the end of the pages array per coordinator conflict-avoidance
+    # convention. Spec ordering is informational; coordinator may reorder pages
+    # post-merge. Five panels per spec: KPI strip (5 tiles), stacked bar
+    # status x fy, detail table, cross-category CXO-sponsorship panel,
+    # leading-indicator stalled-initiatives tile.
+    {
+      "name": "p_initiative_outcomes",
+      "displayName": "Initiative outcomes",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_initiative_outcomes",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Initiative outcomes\n",
+                "\n",
+                "Internal initiatives — Field Eng improvement projects, FEIP tickets, product-feedback campaigns. ",
+                "Where the strategist's *organisational* leverage shows up. ",
+                "Stalled tile uses a 30-day threshold against `last_activity_at` (latest of initiative + linked exec_meetings). ",
+                "On-hold and paused are intentional pauses and do NOT count as stalled."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 6, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_initiatives_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_status",
+                  "fields": [
+                    {"name": "sum(active_count)", "expression": "SUM(`active_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(active_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Active initiatives",
+                "showDescription": True,
+                "description": "Status = 'active'"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_initiatives_complete",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_status",
+                  "fields": [
+                    {"name": "sum(complete_count)", "expression": "SUM(`complete_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(complete_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Completed FY",
+                "showDescription": True,
+                "description": "Status = 'complete' (filtered by FY)"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_initiatives_on_hold",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_status",
+                  "fields": [
+                    {"name": "sum(on_hold_count)", "expression": "SUM(`on_hold_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(on_hold_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "On hold",
+                "showDescription": True,
+                "description": "Intentional pause — not stalled"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_initiatives_stalled",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_status",
+                  "fields": [
+                    {"name": "sum(stalled_count)", "expression": "SUM(`stalled_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(stalled_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Stalled",
+                "showDescription": True,
+                "description": "Active + no activity > 30d (configurable)"
+              }
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_initiatives_feip_tracked",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_with_links",
+                  "fields": [
+                    {"name": "countdistinct(feip_ticket)", "expression": "COUNT(DISTINCT `feip_ticket`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "countdistinct(feip_ticket)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "FEIP tickets tracked",
+                "showDescription": True,
+                "description": "Distinct non-NULL feip_ticket"
+              }
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "chart_initiatives_by_status_fy",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_status",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "sum(initiatives_count)", "expression": "SUM(`initiatives_count`)"},
+                    {"name": "status", "expression": "`status`"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "fy",
+                  "scale": {"type": "categorical"}
+                },
+                "y": {
+                  "fieldName": "sum(initiatives_count)",
+                  "scale": {"type": "quantitative", "stackMode": "stacked"}
+                },
+                "color": {
+                  "fieldName": "status",
+                  "scale": {"type": "categorical"},
+                  "legend": {"position": "bottom"}
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Initiatives by status × FY (stacked)"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 4, "width": 6, "height": 5}
+        },
+        {
+          "widget": {
+            "name": "tbl_initiatives_detail",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_with_links",
+                  "fields": [
+                    {"name": "name", "expression": "`name`"},
+                    {"name": "feip_ticket", "expression": "`feip_ticket`"},
+                    {"name": "status", "expression": "`status`"},
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "last_activity_at", "expression": "`last_activity_at`"},
+                    {"name": "days_since_last_activity", "expression": "`days_since_last_activity`"},
+                    {"name": "linked_exec_meeting_count", "expression": "`linked_exec_meeting_count`"},
+                    {"name": "linked_customer_engagement_count", "expression": "`linked_customer_engagement_count`"},
+                    {"name": "has_cxo_sponsorship", "expression": "`has_cxo_sponsorship`"}
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "name", "displayName": "Initiative", "type": "string"},
+                  {
+                    "fieldName": "feip_ticket",
+                    "displayName": "FEIP",
+                    "type": "string",
+                    "displayAs": "string",
+                    "booleanValues": ["—", "—"]
+                  },
+                  {"fieldName": "status", "displayName": "Status", "type": "string"},
+                  {"fieldName": "fy", "displayName": "FY", "type": "string"},
+                  {"fieldName": "last_activity_at", "displayName": "Last activity", "type": "datetime"},
+                  {"fieldName": "days_since_last_activity", "displayName": "Days idle", "type": "integer"},
+                  {"fieldName": "linked_exec_meeting_count", "displayName": "Exec meetings", "type": "integer"},
+                  {"fieldName": "linked_customer_engagement_count", "displayName": "Linked engagements", "type": "integer"},
+                  {"fieldName": "has_cxo_sponsorship", "displayName": "CXO sponsored", "type": "boolean"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Initiatives detail (sortable by Days idle for stale-ness)",
+                "showDescription": True,
+                "description": "NULL feip_ticket renders as '—' at the panel level. Days idle = days since latest activity (initiative or linked exec_meeting)."
+              }
+            }
+          },
+          "position": {"x": 0, "y": 9, "width": 6, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "tbl_initiatives_cxo_sponsored",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_with_links",
+                  "fields": [
+                    {"name": "name", "expression": "`name`"},
+                    {"name": "feip_ticket", "expression": "`feip_ticket`"},
+                    {"name": "status", "expression": "`status`"},
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "cxo_meeting_count", "expression": "`cxo_meeting_count`"},
+                    {"name": "has_cxo_sponsorship", "expression": "`has_cxo_sponsorship`"}
+                  ],
+                  "filters": [
+                    {
+                      "name": "has_cxo_sponsorship_filter",
+                      "expression": "`has_cxo_sponsorship` = true"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "name", "displayName": "Initiative", "type": "string"},
+                  {"fieldName": "feip_ticket", "displayName": "FEIP", "type": "string"},
+                  {"fieldName": "status", "displayName": "Status", "type": "string"},
+                  {"fieldName": "fy", "displayName": "FY", "type": "string"},
+                  {"fieldName": "cxo_meeting_count", "displayName": "CXO meetings", "type": "integer"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Initiatives with CXO sponsorship",
+                "showDescription": True,
+                "description": "Initiatives where ≥1 linked exec_meeting has is_cxo=true (cross-category linkage via exec_meetings.initiative_id)."
+              }
+            }
+          },
+          "position": {"x": 0, "y": 16, "width": 3, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "tbl_initiatives_stalled",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_initiatives_with_links",
+                  "fields": [
+                    {"name": "name", "expression": "`name`"},
+                    {"name": "feip_ticket", "expression": "`feip_ticket`"},
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "days_since_last_activity", "expression": "`days_since_last_activity`"},
+                    {"name": "is_stalled", "expression": "`is_stalled`"}
+                  ],
+                  "filters": [
+                    {
+                      "name": "is_stalled_filter",
+                      "expression": "`is_stalled` = true"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "name", "displayName": "Initiative", "type": "string"},
+                  {"fieldName": "feip_ticket", "displayName": "FEIP", "type": "string"},
+                  {"fieldName": "fy", "displayName": "FY", "type": "string"},
+                  {"fieldName": "days_since_last_activity", "displayName": "Days idle", "type": "integer"}
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Stalled initiatives — leading indicator",
+                "showDescription": True,
+                "description": "Active initiatives with no activity > 30 days. Threshold configurable — change `> 30` in `is_stalled` definition. on_hold + paused intentionally excluded."
+              }
+            }
+          },
+          "position": {"x": 3, "y": 16, "width": 3, "height": 6}
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+    # --- end T-221 ---
   ]
 }
 
