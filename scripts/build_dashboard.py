@@ -945,6 +945,85 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-222 ---
+    ,
+    # --- T-213 UCO velocity datasets ---
+    # Both datasets read from main.field_strategist_cockpit.v_customer_engagement_uco_velocity
+    # (DDL in scripts/init_uc_tables.sql). One row per (engagement_id, uco_id);
+    # manual orphans excluded by the view (no asq_uco linkage).
+    {
+      "name": "ds_uco_velocity_summary",
+      "displayName": "uco_velocity_summary",
+      "queryLines": [
+        "SELECT\n",
+        "  current_stage AS stage,\n",
+        "  percentile_approx(days_in_current_stage, 0.5) AS median_days_in_stage,\n",
+        "  COUNT(DISTINCT engagement_id) AS engagement_count,\n",
+        "  COUNT(DISTINCT uco_id) AS uco_count\n",
+        "FROM main.field_strategist_cockpit.v_customer_engagement_uco_velocity\n",
+        "WHERE strategist_email IS NOT NULL\n",
+        "  AND current_stage IN ('U1','U2','U3','U4','U5','U6')\n",
+        "GROUP BY current_stage\n",
+        "ORDER BY current_stage\n"
+      ]
+    },
+    {
+      "name": "ds_uco_velocity_detail",
+      "displayName": "uco_velocity_detail",
+      "queryLines": [
+        # Per-row detail powering the KPI tile (% engagements with ≥1 90d advance),
+        # the transitions-per-quarter chart (using most-recent transition only —
+        # previous_stage→current_stage at most_recent_stage_change_date), and
+        # the detail table. transition_quarter is derived from
+        # most_recent_stage_change_date using FY runs Feb→Jan (FY27 = Feb 2026 –
+        # Jan 2027), mirroring the convention used elsewhere in this dashboard.
+        "SELECT\n",
+        "  strategist_email,\n",
+        "  engagement_id,\n",
+        "  uco_id,\n",
+        "  customer,\n",
+        "  account_id,\n",
+        "  fy,\n",
+        "  quarter,\n",
+        "  engagement_type,\n",
+        "  engagement_format,\n",
+        "  ASQ_Start_Date,\n",
+        "  current_stage,\n",
+        "  previous_stage,\n",
+        "  start_stage,\n",
+        "  days_in_current_stage,\n",
+        "  most_recent_stage_change_date,\n",
+        "  stages_advanced_since_engagement_start,\n",
+        "  stage_advance_within_90d,\n",
+        "  CASE\n",
+        "    WHEN previous_stage IN ('U3','U4','U5')\n",
+        "     AND current_stage  IN ('U4','U5','U6')\n",
+        "     AND CAST(SUBSTRING(current_stage,2,1) AS INT)\n",
+        "       = CAST(SUBSTRING(previous_stage,2,1) AS INT) + 1\n",
+        "    THEN CONCAT(previous_stage, '->', current_stage)\n",
+        "    ELSE NULL\n",
+        "  END AS late_stage_transition,\n",
+        "  CASE WHEN most_recent_stage_change_date IS NOT NULL THEN\n",
+        "    CONCAT(\n",
+        "      'FY',\n",
+        "      LPAD(CAST(CASE\n",
+        "        WHEN MONTH(most_recent_stage_change_date) >= 2\n",
+        "        THEN YEAR(most_recent_stage_change_date) + 1 - 2000\n",
+        "        ELSE YEAR(most_recent_stage_change_date) - 2000\n",
+        "      END AS STRING), 2, '0'),\n",
+        "      'Q',\n",
+        "      CAST(CEIL(\n",
+        "        (CASE WHEN MONTH(most_recent_stage_change_date) >= 2\n",
+        "              THEN MONTH(most_recent_stage_change_date) - 1\n",
+        "              ELSE MONTH(most_recent_stage_change_date) + 11\n",
+        "         END) / 3.0\n",
+        "      ) AS INT)\n",
+        "    )\n",
+        "  END AS transition_quarter\n",
+        "FROM main.field_strategist_cockpit.v_customer_engagement_uco_velocity\n",
+        "WHERE strategist_email IS NOT NULL\n"
+      ]
+    }
+    # --- end T-213 ---
   ],
   "pages": [
     {
@@ -2998,6 +3077,321 @@ SERIALIZED_DASHBOARD: dict = {
             "height": 8
           }
         }
+        ,
+        # --- T-213 UCO velocity panels ---
+        # Four panels: header, KPI (% engagements with ≥1 advance within 90d),
+        # bar (median days_in_current_stage per stage U1..U6), bar (count of
+        # late-stage transitions per quarter), and the detail table.
+        {
+          "widget": {
+            "name": "header_uco_velocity",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## UCO Velocity\n",
+                "\n",
+                "How fast accounts move U1→U6 on engagements you touched. Joins your `asq_id` to `asq_uco` → `uco_change_data` (rank=1 latest snapshot).\n",
+                "`stage_advance_within_90d` = at least one stage transition (ordinal up) within 90 days of `ASQ_Start_Date`.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 64,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_uco_advance_90d_pct",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_uco_velocity_detail",
+                  "fields": [
+                    {
+                      "name": "pct_advance_90d",
+                      "expression": "COUNT(DISTINCT CASE WHEN `stage_advance_within_90d` THEN `engagement_id` END) / NULLIF(COUNT(DISTINCT `engagement_id`), 0)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "pct_advance_90d",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "% engagements with stage advance ≤ 90d",
+                "showDescription": True,
+                "description": "Of engagements with ≥1 UCO, share where at least one UCO advanced a stage within 90 days of ASQ_Start_Date."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 66,
+            "width": 2,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_uco_median_days_in_stage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_uco_velocity_summary",
+                  "fields": [
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    },
+                    {
+                      "name": "median_days_in_stage",
+                      "expression": "`median_days_in_stage`"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "stage",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "median_days_in_stage",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Median days in current stage (U1..U6)"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 66,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_uco_late_transitions_by_quarter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_uco_velocity_detail",
+                  "fields": [
+                    {
+                      "name": "transition_quarter",
+                      "expression": "`transition_quarter`"
+                    },
+                    {
+                      "name": "late_stage_transition",
+                      "expression": "`late_stage_transition`"
+                    },
+                    {
+                      "name": "transition_count",
+                      "expression": "COUNT(`uco_id`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "transition_quarter",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "transition_count",
+                  "scale": {
+                    "type": "quantitative",
+                    "stackMode": "stacked"
+                  }
+                },
+                "color": {
+                  "fieldName": "late_stage_transition",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "legend": {
+                    "position": "bottom"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Late-stage transitions per quarter (U3→U4 / U4→U5 / U5→U6) — most-recent transition only"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 71,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "tbl_uco_velocity_detail",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_uco_velocity_detail",
+                  "fields": [
+                    {
+                      "name": "customer",
+                      "expression": "`customer`"
+                    },
+                    {
+                      "name": "engagement_id",
+                      "expression": "`engagement_id`"
+                    },
+                    {
+                      "name": "uco_id",
+                      "expression": "`uco_id`"
+                    },
+                    {
+                      "name": "fy",
+                      "expression": "`fy`"
+                    },
+                    {
+                      "name": "current_stage",
+                      "expression": "`current_stage`"
+                    },
+                    {
+                      "name": "start_stage",
+                      "expression": "`start_stage`"
+                    },
+                    {
+                      "name": "days_in_current_stage",
+                      "expression": "`days_in_current_stage`"
+                    },
+                    {
+                      "name": "stages_advanced_since_engagement_start",
+                      "expression": "`stages_advanced_since_engagement_start`"
+                    },
+                    {
+                      "name": "stage_advance_within_90d",
+                      "expression": "`stage_advance_within_90d`"
+                    },
+                    {
+                      "name": "most_recent_stage_change_date",
+                      "expression": "`most_recent_stage_change_date`"
+                    }
+                  ],
+                  "disaggregated": True
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "customer",
+                    "displayName": "Customer",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "engagement_id",
+                    "displayName": "ASQ",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "uco_id",
+                    "displayName": "UCO",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "fy",
+                    "displayName": "FY",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "current_stage",
+                    "displayName": "Stage",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "start_stage",
+                    "displayName": "Start stage",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "days_in_current_stage",
+                    "displayName": "Days in stage",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "stages_advanced_since_engagement_start",
+                    "displayName": "Stages advanced",
+                    "type": "integer"
+                  },
+                  {
+                    "fieldName": "stage_advance_within_90d",
+                    "displayName": "Advanced ≤90d",
+                    "type": "boolean"
+                  },
+                  {
+                    "fieldName": "most_recent_stage_change_date",
+                    "displayName": "Last change",
+                    "type": "date"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Engagement × UCO velocity detail"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 76,
+            "width": 6,
+            "height": 8
+          }
+        }
+        # --- end T-213 ---
       ],
       "pageType": "PAGE_TYPE_CANVAS"
     },
