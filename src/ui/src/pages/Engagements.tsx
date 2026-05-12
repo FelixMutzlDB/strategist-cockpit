@@ -20,6 +20,11 @@ import {
   type Engagement,
 } from "@/lib/api";
 import {
+  ImpactTagPicker,
+  ImpactTagChips,
+  type ImpactTag,
+} from "@/components/ImpactTagPicker";
+import {
   BarChart3,
   Users,
   Target,
@@ -57,6 +62,9 @@ const EMPTY_FORM: Omit<Engagement, "id"> = {
   related_documents: null,
   next_steps: null,
   uco_ids: null,
+  // T-212 — outcome tags + notes, persisted via activity_app_data overlay.
+  impact_tags: [],
+  impact_notes: null,
 };
 
 type SortDir = "asc" | "desc" | null;
@@ -265,6 +273,8 @@ export default function Engagements() {
       related_documents: eng.related_documents,
       next_steps: eng.next_steps,
       uco_ids: eng.uco_ids,
+      impact_tags: eng.impact_tags || [],
+      impact_notes: eng.impact_notes ?? null,
     });
     setShowForm(true);
   };
@@ -618,8 +628,13 @@ export default function Engagements() {
                   {filteredEngagements.map((eng) => (
                     <tr key={eng.id} className="border-b last:border-0 hover:bg-muted/50 group">
                       <td className="py-2 font-medium">{eng.customer || "--"}</td>
-                      <td className="py-2 text-muted-foreground max-w-[200px] truncate">
-                        {eng.engagement_title || "--"}
+                      <td className="py-2 text-muted-foreground max-w-[260px]">
+                        <div className="truncate">{eng.engagement_title || "--"}</div>
+                        {eng.impact_tags && eng.impact_tags.length > 0 && (
+                          <div className="mt-1">
+                            <ImpactTagChips tags={eng.impact_tags} />
+                          </div>
+                        )}
                       </td>
                       <td className="py-2">{typeBadge(eng.engagement_type)}</td>
                       <td className="py-2">{statusBadge(eng.status)}</td>
@@ -696,6 +711,19 @@ export default function Engagements() {
                 )}
               </div>
               <div className="col-span-2"><span className="text-muted-foreground">UCO IDs</span><p className="font-medium">{viewingEng.uco_ids || "--"}</p></div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Outcomes</span>
+                <div className="mt-1">
+                  {viewingEng.impact_tags && viewingEng.impact_tags.length > 0 ? (
+                    <ImpactTagChips tags={viewingEng.impact_tags} />
+                  ) : (
+                    <p className="font-medium">--</p>
+                  )}
+                </div>
+                {viewingEng.impact_notes && (
+                  <p className="mt-1 text-sm whitespace-pre-wrap">{viewingEng.impact_notes}</p>
+                )}
+              </div>
               <div className="col-span-2"><span className="text-muted-foreground">Actionable Outcome</span><p className="font-medium whitespace-pre-wrap">{viewingEng.actionable_outcome || "--"}</p></div>
               <div className="col-span-2"><span className="text-muted-foreground">Next Steps</span><p className="font-medium whitespace-pre-wrap">{viewingEng.next_steps || "--"}</p></div>
               <div className="col-span-2"><span className="text-muted-foreground">Related Documents</span><p className="font-medium whitespace-pre-wrap">{viewingEng.related_documents || "--"}</p></div>
@@ -772,6 +800,29 @@ export default function Engagements() {
             <div className="col-span-2 space-y-2">
               <Label htmlFor="uco_ids">UCO IDs</Label>
               <Input id="uco_ids" value={form.uco_ids || ""} onChange={(e) => updateField("uco_ids", e.target.value)} placeholder="e.g. UCO-1234, UCO-5678" />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Outcomes</Label>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Tag the qualitative outcomes this engagement delivered. Colour groups: blue = access plays, green = account progress, violet = product / roadmap, amber = reach / enablement.
+              </p>
+              <ImpactTagPicker
+                value={(form.impact_tags || []) as ImpactTag[]}
+                onChange={(next) =>
+                  setForm((prev) => ({ ...prev, impact_tags: next }))
+                }
+              />
+              <Label htmlFor="impact_notes" className="pt-2">Outcome notes</Label>
+              <Textarea
+                id="impact_notes"
+                value={form.impact_notes || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, impact_notes: e.target.value || null }))
+                }
+                placeholder="Narrative behind the tags (max 4000 chars)..."
+                rows={2}
+                maxLength={4000}
+              />
             </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="actionable_outcome">Actionable Outcome</Label>

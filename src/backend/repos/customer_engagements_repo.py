@@ -24,11 +24,41 @@ from typing import Any
 
 from src.backend import dbsql
 from src.backend.config import settings
+from src.backend.repos import activity_overlay_repo
 
 
 def _qual(table: str) -> str:
     """Fully-qualify a table or view name with the configured UC namespace."""
     return f"{settings.uc_catalog}.{settings.uc_schema}.{table}"
+
+
+# T-212: fields handled by the overlay repo, not the manual table.
+_OVERLAY_FIELDS = ("impact_tags", "impact_notes")
+
+
+def _attach_overlay(
+    row: dict | None,
+    *,
+    user_token: str,
+    strategist_email: str,
+) -> dict | None:
+    """Mutate ``row`` to include ``impact_tags`` / ``impact_notes`` from the overlay."""
+    if row is None:
+        return None
+    key = activity_overlay_repo.customer_engagement_key(row)
+    overlay = activity_overlay_repo.get_tags(
+        user_token=user_token,
+        category="customer",
+        activity_key=key,
+        strategist_email=strategist_email,
+    )
+    if overlay:
+        row["impact_tags"] = overlay["impact_tags"]
+        row["impact_notes"] = overlay["impact_notes"]
+    else:
+        row["impact_tags"] = []
+        row["impact_notes"] = None
+    return row
 
 
 # --- READS ---------------------------------------------------------------
@@ -69,7 +99,10 @@ def list_engagements(
         f"WHERE {' AND '.join(where)} "
         f"ORDER BY id DESC"
     )
-    return dbsql.fetch_all(user_token, query, params)
+    rows = dbsql.fetch_all(user_token, query, params)
+    for row in rows:
+        _attach_overlay(row, user_token=user_token, strategist_email=strategist_email)
+    return rows
 
 
 def get_engagement(
@@ -85,11 +118,12 @@ def get_engagement(
         f"FROM {_qual('v_customer_engagements_unified')} "
         f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
     )
-    return dbsql.fetch_one(
+    row = dbsql.fetch_one(
         user_token,
         query,
         {"strategist_email": strategist_email, "id": engagement_id},
     )
+    return _attach_overlay(row, user_token=user_token, strategist_email=strategist_email)
 
 
 # --- WRITES (manual orphans) ---------------------------------------------
@@ -159,7 +193,21 @@ def create_engagement(
     )
     if row is None:
         raise RuntimeError("Insert succeeded but follow-up SELECT returned no row.")
-    return row
+
+    # T-212: if the caller supplied impact tags/notes on create, persist
+    # them via the overlay against the freshly-minted manual key.
+    overlay_tags = payload.get("impact_tags") or []
+    overlay_notes = payload.get("impact_notes")
+    if overlay_tags or overlay_notes:
+        activity_overlay_repo.set_tags(
+            user_token=user_token,
+            category="customer",
+            activity_key=activity_overlay_repo.customer_engagement_key(row),
+            strategist_email=strategist_email,
+            tags=list(overlay_tags),
+            notes=overlay_notes,
+        )
+    return _attach_overlay(row, user_token=user_token, strategist_email=strategist_email)
 
 
 def update_engagement(
@@ -171,26 +219,49 @@ def update_engagement(
 ) -> dict | None:
     """Update an *orphan* engagement. SFDC ASQs are not updatable here —
     the router pre-checks existence in ``v_customer_engagements_unified``
-    first."""
-    if not payload:
-        return get_engagement(
-            user_token=user_token,
-            strategist_email=strategist_email,
-            engagement_id=engagement_id,
+    first.
+
+    T-212: ``impact_tags`` / ``impact_notes`` are split out of the payload
+    and routed to ``activity_app_data`` via ``activity_overlay_repo`` —
+    those columns don't live on ``customer_engagements_manual``.
+    """
+    # Split overlay-bound fields out of the core table payload.
+    overlay_payload = {k: payload.pop(k) for k in list(_OVERLAY_FIELDS) if k in payload}
+
+    if payload:
+        set_clauses = [f"{k} = %({k})s" for k in payload]
+        update_sql = (
+            f"UPDATE {_qual('customer_engagements_manual')} "
+            f"SET {', '.join(set_clauses)} "
+            f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
         )
-    set_clauses = [f"{k} = %({k})s" for k in payload]
-    update_sql = (
-        f"UPDATE {_qual('customer_engagements_manual')} "
-        f"SET {', '.join(set_clauses)} "
-        f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
-    )
-    params = {**payload, "strategist_email": strategist_email, "id": engagement_id}
-    dbsql.execute(user_token, update_sql, params)
-    return get_engagement(
+        params = {**payload, "strategist_email": strategist_email, "id": engagement_id}
+        dbsql.execute(user_token, update_sql, params)
+
+    # Fetch current state (with overlay) before deciding whether to upsert.
+    existing = get_engagement(
         user_token=user_token,
         strategist_email=strategist_email,
         engagement_id=engagement_id,
     )
+    if existing is None:
+        return None
+
+    if overlay_payload:
+        # PATCH semantics: only fields present in the overlay payload change.
+        new_tags = overlay_payload.get("impact_tags", existing.get("impact_tags") or [])
+        new_notes = overlay_payload.get("impact_notes", existing.get("impact_notes"))
+        activity_overlay_repo.set_tags(
+            user_token=user_token,
+            category="customer",
+            activity_key=activity_overlay_repo.customer_engagement_key(existing),
+            strategist_email=strategist_email,
+            tags=list(new_tags),
+            notes=new_notes,
+        )
+        existing["impact_tags"] = list(new_tags)
+        existing["impact_notes"] = new_notes
+    return existing
 
 
 def delete_engagement(

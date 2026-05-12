@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, Integer, PrimaryKeyConstraint, String, Text, func
 
 from src.backend.database import Base
 
@@ -40,3 +40,27 @@ class Project(Base):
     # Email of the user who created the project (from X-Forwarded-Email).
     # DELETE is gated to creator-or-admin (T-208 / SDR F-TM-5).
     created_by_email = Column(String(255), index=True)
+
+
+class ActivityOverlay(Base):
+    """T-212 SQLite dev mirror of ``activity_app_data``.
+
+    ``impact_tags`` is stored as a JSON-encoded TEXT blob in SQLite (Delta
+    has native ARRAY<STRING>); the repo serialises/deserialises at the
+    boundary so callers always work with ``list[str]``.
+    """
+
+    __tablename__ = "activity_overlay"
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "category", "activity_key", "strategist_email",
+            name="pk_activity_overlay",
+        ),
+    )
+
+    category = Column(String(50), nullable=False)
+    activity_key = Column(String(255), nullable=False)
+    strategist_email = Column(String(255), nullable=False)
+    impact_tags = Column(Text)  # JSON-encoded list[str]
+    impact_notes = Column(Text)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

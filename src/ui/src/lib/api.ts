@@ -30,6 +30,10 @@ export interface Engagement {
   next_steps: string | null;
   // Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
   uco_ids: string | null;
+  // T-212: qualitative outcome tags (closed 10-tag enum, see
+  // src/ui/src/components/ImpactTagPicker.tsx) + free-text notes.
+  impact_tags?: string[];
+  impact_notes?: string | null;
 }
 
 export function listEngagements(params?: {
