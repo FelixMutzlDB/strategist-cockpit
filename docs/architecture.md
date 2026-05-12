@@ -122,6 +122,7 @@ Migration shape when Lakebase Autoscaling lands:
 - App-managed Delta tables (`engagement_app_data`, `projects`, optionally `engagements_manual`) move to Lakebase for OLTP-grade writes
 - Reads of `v_engagements_unified` and `asq_uco` stay on the warehouse (UC remains the analytic projection)
 - A periodic Lakebase → UC reverse-sync feeds the analytic projection so dashboards and Genie keep working
+- Sync is **one-way: Lakebase → UC only**. UC → Lakebase writeback is forbidden — re-confirm at T-211 design time per SDR-4682 standing advisory [A-1]. Today this is enforced structurally: no `psycopg2`/`asyncpg` import in runtime code; the driver lives behind the `[lakebase]` extra in `pyproject.toml` (N-10 closure)
 - App auth flips back to a hybrid: App-SP for Lakebase writes + OBO for UC reads (matches the original design intent)
 
 Tracked as backlog item T-211.

@@ -4,6 +4,43 @@
 >
 > Way of working (same as CLAUDE.md): **Investigate → Plan incl. test design → Implement → Thoroughly test → Iterate.** Focus on operational efficiency, security, and coding best practices.
 
+## Done (2026-05-12 SDR-4682 round-5 standing-advisory closure)
+
+ProdSec's round-5 final re-review (2026-05-11) cleared SDR-4682 for
+deployment — all C/H/M findings closed across rounds 1–4 and a clean
+full re-scan found no new ones. Two LOW non-blocking standing
+advisories remained, plus one stale docstring. All addressed in this
+sweep so the deploying tree carries nothing on the SDR list.
+
+- **[A-1] LOW Lakebase one-way sync — sharpened in `docs/architecture.md`.**
+  Goal-end-state section now states explicitly *"Sync is one-way:
+  Lakebase → UC only. UC → Lakebase writeback is forbidden — re-confirm
+  at T-211 design time per SDR-4682 standing advisory [A-1]."* Also
+  notes the structural enforcement today (no `psycopg2`/`asyncpg`
+  imports in runtime code; driver isolated to the `[lakebase]` extra
+  per N-10).
+- **[A-2] LOW Audit Delta sink observability — `docs/deployment.md`
+  post-deploy verification step added.** Tail the Apps log stream after
+  first deploy, exercise a state-changing route, confirm structured
+  `audit ...` lines appear. Then temporarily revoke INSERT on
+  `app_audit_log`, repeat, confirm the `Audit Delta sink failed: ...`
+  WARN line is visible — proves warehouse-write failures are observable
+  so silent Delta-write loss is detectable. Code side already correct
+  (`logging.basicConfig(level=logging.INFO)` in
+  `src/backend/main.py:12` passes WARN through).
+- **Docstring drift in `src/backend/middleware.py` — fixed.** Module
+  docstring now reads `X-Frame-Options: DENY` (matches the code at line
+  66, which N-8 already moved off `SAMEORIGIN`).
+- **`src/backend/audit.py` docstring — already current.** Reviewer's
+  follow-up checklist flagged a stale `current_user_token_or_empty()`
+  reference, but the function was removed in commit `4262a3b` and the
+  docstring already reads `current_user_token()`. No-op; called out
+  here so the reviewer can tick the line.
+
+Verified: `ruff check src tests scripts` clean, `pytest tests/` 113
+passed / 6 skipped, `npm run build` clean. Doc-only sweep; zero runtime
+behaviour change.
+
 ## Done (2026-05-04 P2 closure sweep)
 
 Closed in three commits on `main`:

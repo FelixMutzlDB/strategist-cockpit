@@ -7,7 +7,8 @@ Stamps defense-in-depth headers on every response. Specifics:
   out to the Stratego KA serving endpoint. Hosts are configurable via env so we
   can tune per workspace without code changes.
 - X-Content-Type-Options: nosniff — stops browsers from guessing MIME types.
-- X-Frame-Options: SAMEORIGIN — we're not iframe'd externally.
+- X-Frame-Options: DENY — the cockpit is never legitimately framed
+  (matches ``frame-ancestors 'none'`` in the CSP). SDR-4682 N-8.
 - Referrer-Policy: strict-origin-when-cross-origin — leaks no path info off-origin.
 - Permissions-Policy: blocks camera/microphone/geolocation the app never uses.
 
