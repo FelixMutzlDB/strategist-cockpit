@@ -19,9 +19,14 @@ dependencies = [
 [project.optional-dependencies]
 # Dev tooling — pytest, ruff, etc. Not installed in production containers.
 # CI installs the [dev] extra so tests + lint can run.
+# pyarrow is required by scripts/migrate_strategist_activity_from_sheet.py
+# (T-217) — kept here because the script is dev-only (one-shot migration,
+# not a production code path). Bump to runtime dependency if/when the app
+# starts reading Parquet at request time.
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.7.0",
+    "pyarrow>=18.0.0",
 ]
 # SDR-4682 N-10: psycopg2-binary lives behind a [lakebase] extra so it
 # isn't shipped in the production runtime image until the Lakebase pivot
