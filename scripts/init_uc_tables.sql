@@ -11,10 +11,12 @@
 USE CATALOG main;
 USE SCHEMA field_strategist_cockpit;
 
--- Orphan engagements: the app's writeable canonical store for engagements
--- that don't have a Salesforce ASQ ID (or pre-date one). v_engagements
--- UNIONs this with asq_uco for the unified read surface.
-CREATE TABLE IF NOT EXISTS engagements_manual (
+-- Orphan customer engagements: the app's writeable canonical store for
+-- customer engagements that don't have a Salesforce ASQ ID (or pre-date
+-- one). v_customer_engagements UNIONs this with asq_uco for the unified
+-- read surface. Renamed from `engagements_manual` under T-215 to make
+-- room for non-customer engagement categories (evangelism, initiatives).
+CREATE TABLE IF NOT EXISTS customer_engagements_manual (
   id              BIGINT GENERATED ALWAYS AS IDENTITY,
   strategist_email STRING NOT NULL,
   engagement_type STRING,
@@ -35,16 +37,17 @@ CREATE TABLE IF NOT EXISTS engagements_manual (
 USING DELTA
 TBLPROPERTIES (delta.enableChangeDataFeed = true);
 
--- App-private overlay: per-engagement annotations the strategist owns
--- (next steps, related documents). Joined onto v_engagements_unified at
--- read time. Tenancy enforced by `strategist_email`.
-CREATE TABLE IF NOT EXISTS engagement_app_data (
+-- App-private overlay: per-customer-engagement annotations the strategist
+-- owns (next steps, related documents). Joined onto
+-- v_customer_engagements_unified at read time. Tenancy enforced by
+-- `strategist_email`. Renamed from `engagement_app_data` under T-215.
+CREATE TABLE IF NOT EXISTS customer_engagement_app_data (
   engagement_key  STRING NOT NULL,        -- composite key: asq_id OR "manual:{id}"
   strategist_email STRING NOT NULL,
   next_steps      STRING,
   related_documents STRING,
   updated_at      TIMESTAMP,
-  CONSTRAINT pk_engagement_app_data PRIMARY KEY (engagement_key, strategist_email)
+  CONSTRAINT pk_customer_engagement_app_data PRIMARY KEY (engagement_key, strategist_email)
 )
 USING DELTA;
 

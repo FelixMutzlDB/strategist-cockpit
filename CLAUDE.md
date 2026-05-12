@@ -60,7 +60,7 @@ databricks apps deploy strategist-cockpit --source-code-path .
 ## Architecture (10-sec version)
 - FastAPI (`src/backend/main.py`).
 - **Goal data layer (target end-state):** **Autoscaling Lakebase Postgres** as the OLTP store for app-managed state (scale-to-zero, branching, OLTP-grade write latency). Tracked as T-211 — blocked on Lakebase Autoscaling reaching GA on Central Logfood.
-- **Interim data layer (this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*` accessed via Databricks SQL warehouse + the `databricks-sql-connector`, OBO. Reads come from `v_engagements_unified` (joined SFDC + manual + revenue); writes go to `engagements_manual` (orphans), `engagement_app_data` (app-private overlay), and `projects` (gallery — both new Delta tables on first deploy). Tracked as T-206.
+- **Interim data layer (this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*` accessed via Databricks SQL warehouse + the `databricks-sql-connector`, OBO. Reads come from `v_customer_engagements_unified` (joined SFDC + manual + revenue); writes go to `customer_engagements_manual` (orphans), `customer_engagement_app_data` (app-private overlay), and `projects` (gallery — both new Delta tables on first deploy). Tracked as T-206.
 - **Today's code:** SQLAlchemy 2 + SQLite for local dev only. Production code on UC + DBSQL is in flight under T-206.
 - Routers under `src/backend/routers/`: `engagements`, `projects`, `canvas`, `chat`. All mounted at `/api/*`.
 - React 18 + Vite + shadcn/ui + Tailwind. shadcn primitives under `src/ui/src/components/ui/`, custom in `components/`, pages in `pages/`.
@@ -86,15 +86,15 @@ databricks apps deploy strategist-cockpit --source-code-path .
 
 ## Unity Catalog assets the app depends on
 Read sources:
-- `main.field_strategist_cockpit.v_engagements_unified` (primary read surface — engagements ⋈ revenue + AE + territory)
-- `main.field_strategist_cockpit.v_engagements` (UNION of SFDC ASQs + manual orphans)
-- `main.field_strategist_cockpit.engagements_manual` (Delta — orphan engagements, also a write target)
+- `main.field_strategist_cockpit.v_customer_engagements_unified` (primary read surface — engagements ⋈ revenue + AE + territory)
+- `main.field_strategist_cockpit.v_customer_engagements` (UNION of SFDC ASQs + manual orphans)
+- `main.field_strategist_cockpit.customer_engagements_manual` (Delta — orphan engagements, also a write target)
 - `main.field_usage_dashboard.asq_uco` (daily SFDC snapshot, owned by Field Usage Dashboard team)
 - `main.gtm_gold.rpt_c360_overview_unpivoted` (revenue per account per period)
 
 App-managed write targets (created on first deploy):
-- `main.field_strategist_cockpit.engagements_manual` (INSERT new orphans)
-- `main.field_strategist_cockpit.engagement_app_data` (Delta — app-private overlay: `next_steps`, `related_documents`, etc.; tenancy by `strategist_email`)
+- `main.field_strategist_cockpit.customer_engagements_manual` (INSERT new orphans)
+- `main.field_strategist_cockpit.customer_engagement_app_data` (Delta — app-private overlay: `next_steps`, `related_documents`, etc.; tenancy by `strategist_email`)
 - `main.field_strategist_cockpit.projects` (Delta — gallery items; `created_by_email` for ownership)
 
 > Migration to `main.field_strategist_cockpit.*` completed 2026-04-29 (see Strategist Cockpit Migration.md in Felix's Drive). The UC Delta + DBSQL story is **interim**; the goal end-state is autoscaling Lakebase Postgres for app-managed state once it's GA on Central Logfood — see backlog T-211.

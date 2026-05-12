@@ -1,15 +1,16 @@
-"""DBSQL-backed engagements repository (T-206 + F-TM-1).
+"""DBSQL-backed customer engagements repository (T-206 + F-TM-1).
 
-Read source: ``main.field_strategist_cockpit.v_engagements_unified`` — the
-joined view of SFDC ASQs (`asq_uco`) UNIONed with manual orphans
-(`engagements_manual`) and LEFT-joined to revenue + app overlay.
+Read source: ``main.field_strategist_cockpit.v_customer_engagements_unified``
+— the joined view of SFDC ASQs (`asq_uco`) UNIONed with manual orphans
+(`customer_engagements_manual`) and LEFT-joined to revenue + app overlay.
 
 Write targets:
-- ``engagements_manual`` for new orphan engagements.
-- ``engagement_app_data`` for per-engagement overlay (next_steps,
-  related_documents). Today these fields are stored on `engagements_manual`
-  for orphans; the overlay table is reserved for SFDC ASQs that the
-  strategist wants to annotate but cannot edit at source.
+- ``customer_engagements_manual`` for new orphan customer engagements.
+- ``customer_engagement_app_data`` for per-engagement overlay (next_steps,
+  related_documents). Today these fields are stored on
+  ``customer_engagements_manual`` for orphans; the overlay table is
+  reserved for SFDC ASQs that the strategist wants to annotate but cannot
+  edit at source.
 
 Tenancy: every SELECT filters by ``strategist_email``; every INSERT stamps it.
 Updates and deletes against the unified view are scoped to *manual* rows —
@@ -64,7 +65,7 @@ def list_engagements(
         f"SELECT id, engagement_type, status, customer, engagement_title, "
         f"actionable_outcome, ae, asq_url, asq_id, timeframe, fy, quarter, "
         f"related_documents, next_steps, uco_ids "
-        f"FROM {_qual('v_engagements_unified')} "
+        f"FROM {_qual('v_customer_engagements_unified')} "
         f"WHERE {' AND '.join(where)} "
         f"ORDER BY id DESC"
     )
@@ -81,7 +82,7 @@ def get_engagement(
         f"SELECT id, engagement_type, status, customer, engagement_title, "
         f"actionable_outcome, ae, asq_url, asq_id, timeframe, fy, quarter, "
         f"related_documents, next_steps, uco_ids "
-        f"FROM {_qual('v_engagements_unified')} "
+        f"FROM {_qual('v_customer_engagements_unified')} "
         f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
     )
     return dbsql.fetch_one(
@@ -133,7 +134,7 @@ def create_engagement(
     ]
     values = ", ".join(f"%({c})s" for c in cols)
     insert_sql = (
-        f"INSERT INTO {_qual('engagements_manual')} ({', '.join(cols)}) "
+        f"INSERT INTO {_qual('customer_engagements_manual')} ({', '.join(cols)}) "
         f"VALUES ({values})"
     )
     params: dict[str, Any] = {c: payload.get(c) for c in _ORPHAN_FIELDS}
@@ -146,7 +147,7 @@ def create_engagement(
         f"SELECT id, engagement_type, status, customer, engagement_title, "
         f"actionable_outcome, ae, asq_url, asq_id, timeframe, fy, quarter, "
         f"related_documents, next_steps, uco_ids "
-        f"FROM {_qual('engagements_manual')} "
+        f"FROM {_qual('customer_engagements_manual')} "
         f"WHERE strategist_email = %(strategist_email)s "
         f"AND created_at = %(created_at)s "
         f"ORDER BY id DESC LIMIT 1"
@@ -169,7 +170,8 @@ def update_engagement(
     payload: dict[str, Any],
 ) -> dict | None:
     """Update an *orphan* engagement. SFDC ASQs are not updatable here —
-    the router pre-checks existence in ``v_engagements_unified`` first."""
+    the router pre-checks existence in ``v_customer_engagements_unified``
+    first."""
     if not payload:
         return get_engagement(
             user_token=user_token,
@@ -178,7 +180,7 @@ def update_engagement(
         )
     set_clauses = [f"{k} = %({k})s" for k in payload]
     update_sql = (
-        f"UPDATE {_qual('engagements_manual')} "
+        f"UPDATE {_qual('customer_engagements_manual')} "
         f"SET {', '.join(set_clauses)} "
         f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
     )
@@ -199,7 +201,7 @@ def delete_engagement(
 ) -> None:
     """Delete an orphan engagement. No-op for SFDC ASQs (filter doesn't match)."""
     delete_sql = (
-        f"DELETE FROM {_qual('engagements_manual')} "
+        f"DELETE FROM {_qual('customer_engagements_manual')} "
         f"WHERE strategist_email = %(strategist_email)s AND id = %(id)s"
     )
     dbsql.execute(

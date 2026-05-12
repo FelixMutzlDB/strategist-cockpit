@@ -79,7 +79,7 @@ Reads `data/engagements.csv` and inserts records into the `engagements` table, p
 
 ### Production (DBSQL, UC Delta over OBO)
 
-Set `DATA_BACKEND=dbsql` and provide `DATABRICKS_HOST` + `DATABRICKS_WAREHOUSE_ID`. The app opens a per-request `databricks-sql` connection authorized with the strategist's OBO token (`current_user_token()`). Reads come from `v_engagements_unified`; writes target `engagements_manual` / `engagement_app_data` / `projects`. Run `scripts/init_uc_tables.sql` once per environment before first boot.
+Set `DATA_BACKEND=dbsql` and provide `DATABRICKS_HOST` + `DATABRICKS_WAREHOUSE_ID`. The app opens a per-request `databricks-sql` connection authorized with the strategist's OBO token (`current_user_token()`). Reads come from `v_customer_engagements_unified`; writes target `customer_engagements_manual` / `customer_engagement_app_data` / `projects`. Run `scripts/init_uc_tables.sql` once per environment before first boot.
 
 ### Future (Lakebase, T-211)
 

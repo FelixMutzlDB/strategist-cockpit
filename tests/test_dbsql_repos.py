@@ -17,9 +17,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from src.backend.repos import engagements_repo, projects_repo
+from src.backend.repos import customer_engagements_repo as engagements_repo
+from src.backend.repos import projects_repo
 
-# --- engagements_repo ----------------------------------------------------
+# --- customer_engagements_repo --------------------------------------------
 
 
 def test_list_engagements_filters_by_strategist_email():
@@ -35,7 +36,7 @@ def test_list_engagements_filters_by_strategist_email():
             strategist_email="alice@databricks.com",
         )
     query, params = captured[0]
-    assert "v_engagements_unified" in query
+    assert "v_customer_engagements_unified" in query
     assert "strategist_email = %(strategist_email)s" in query
     assert params["strategist_email"] == "alice@databricks.com"
 
@@ -117,7 +118,7 @@ def test_create_engagement_stamps_strategist_email():
         )
     insert_query, insert_params = insert_calls[0]
     assert "INSERT INTO" in insert_query
-    assert "engagements_manual" in insert_query
+    assert "customer_engagements_manual" in insert_query
     assert insert_params["strategist_email"] == "alice@databricks.com"
     assert insert_params["created_by_email"] == "alice@databricks.com"
     assert result == fake_row
@@ -146,7 +147,7 @@ def test_update_engagement_filters_by_strategist_email():
             payload={"status": "Completed"},
         )
     update_query, update_params = update_calls[0]
-    assert "engagements_manual" in update_query
+    assert "customer_engagements_manual" in update_query
     assert "status = %(status)s" in update_query
     assert "WHERE strategist_email = %(strategist_email)s AND id = %(id)s" in update_query
     assert update_params == {

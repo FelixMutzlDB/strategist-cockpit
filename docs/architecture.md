@@ -28,11 +28,13 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
              │ + UC Delta   │  │  + Genie     │
              └──────┬───────┘  └──────────────┘
                     │
-          ┌─────────┼─────────────┐
-          ▼         ▼             ▼
-   v_engagements  engagements_  rpt_c360_
-   _unified      manual +       overview_
-                 engagement_    unpivoted
+          ┌─────────┼──────────────────┐
+          ▼         ▼                  ▼
+   v_customer_   customer_           rpt_c360_
+   engagements_  engagements_        overview_
+   unified       manual +            unpivoted
+                 customer_
+                 engagement_
                  app_data +
                  projects
 ```
@@ -63,7 +65,7 @@ Strategist Cockpit is a full-stack Databricks App with a FastAPI backend and Rea
 Each router has two paths, gated by `settings.data_backend`:
 
 - **`sqlite`** (dev): SQLAlchemy ORM via `database.py` + `models.py`. `Engagement` and `Project` tables created in-process by SQLite. Tenancy not enforced (single-user dev).
-- **`dbsql`** (prod): repository functions in `src/backend/repos/` open a `databricks-sql` connection authorized with `current_user_token()` and execute parameterised SQL against `v_engagements_unified` (read), `engagements_manual` (orphan writes), `engagement_app_data` (overlay), and `projects` (gallery). Every SELECT carries `WHERE strategist_email = :email`; every INSERT stamps that column from the auth dep, never from payload. DDL for these tables is in `scripts/init_uc_tables.sql` and is owned by ops, not the app.
+- **`dbsql`** (prod): repository functions in `src/backend/repos/` open a `databricks-sql` connection authorized with `current_user_token()` and execute parameterised SQL against `v_customer_engagements_unified` (read), `customer_engagements_manual` (orphan writes), `customer_engagement_app_data` (overlay), and `projects` (gallery). Every SELECT carries `WHERE strategist_email = :email`; every INSERT stamps that column from the auth dep, never from payload. DDL for these tables is in `scripts/init_uc_tables.sql` and is owned by ops, not the app.
 
 ## Frontend
 
@@ -96,31 +98,31 @@ Read sources:
 
 | Asset | Type | Description |
 |-------|------|-------------|
-| `main.field_strategist_cockpit.v_engagements_unified` | View | Engagements joined with revenue + AE + territory; primary read surface for the cockpit |
-| `main.field_strategist_cockpit.v_engagements` | View | UNION of SFDC ASQs (from `asq_uco` daily snapshot) + manual orphans |
-| `main.field_strategist_cockpit.engagements_manual` | Delta Table | Canonical store for orphan engagements (no SFDC counterpart). Append-only from the cockpit. |
-| `main.field_usage_dashboard.asq_uco` | Delta Table (read-only, owned by Field Usage Dashboard team) | Daily Salesforce ASQ snapshot — upstream input to `v_engagements` |
+| `main.field_strategist_cockpit.v_customer_engagements_unified` | View | Engagements joined with revenue + AE + territory; primary read surface for the cockpit |
+| `main.field_strategist_cockpit.v_customer_engagements` | View | UNION of SFDC ASQs (from `asq_uco` daily snapshot) + manual orphans |
+| `main.field_strategist_cockpit.customer_engagements_manual` | Delta Table | Canonical store for orphan engagements (no SFDC counterpart). Append-only from the cockpit. |
+| `main.field_usage_dashboard.asq_uco` | Delta Table (read-only, owned by Field Usage Dashboard team) | Daily Salesforce ASQ snapshot — upstream input to `v_customer_engagements` |
 | `main.gtm_gold.rpt_c360_overview_unpivoted` | Table | Revenue/consumption metrics by account and period |
 
 App-managed write targets (interim — created on first deploy; migrate to Lakebase Autoscaling per T-211 once GA):
 
 | Asset | Type | Description |
 |-------|------|-------------|
-| `main.field_strategist_cockpit.engagements_manual` | Delta Table | INSERT for new orphan engagements (existing schema; the cockpit becomes the second writer alongside notebook/SQL) |
-| `main.field_strategist_cockpit.engagement_app_data` | Delta Table (NEW) | App-private overlay: `next_steps`, `related_documents`, `actionable_outcome`, custom tags. Joined to engagements by `asq_id` (or `manual_id` for orphans). Owner column `strategist_email` for tenancy. |
+| `main.field_strategist_cockpit.customer_engagements_manual` | Delta Table | INSERT for new orphan engagements (existing schema; the cockpit becomes the second writer alongside notebook/SQL) |
+| `main.field_strategist_cockpit.customer_engagement_app_data` | Delta Table (NEW) | App-private overlay: `next_steps`, `related_documents`, `actionable_outcome`, custom tags. Joined to engagements by `asq_id` (or `manual_id` for orphans). Owner column `strategist_email` for tenancy. |
 | `main.field_strategist_cockpit.projects` | Delta Table (NEW) | Gallery items (formerly the Lakebase `project` table). Includes `created_by_email` for ownership-gated DELETE (T-208). |
 
 > Historical note: read sources previously lived under `home_felix_mutzl.strategist_canvas.*`. The migration to `main.field_strategist_cockpit.*` was completed 2026-04-29 (see `~/Library/CloudStorage/GoogleDrive-felix.mutzl@databricks.com/My Drive/Docs Felix/Databricks/2 Ongoing/Strategist Cockpit Migration.md`). The cockpit's local SQLite path is being retired in favour of UC + DBSQL — tracked as T-206.
 
-**Sync direction.** Salesforce is the system of record for ASQs. SFDC writes flow into `main.field_usage_dashboard.asq_uco` via a daily snapshot (~24h lag), which feeds `v_engagements`. The cockpit edits **never write back to SFDC directly** — for SFDC-owned fields, edits go through the `strategist_systems_hygiene` skill in the `strategist-toolbox` plugin (which calls SFDC REST). All other edits live in app-managed UC tables (`engagements_manual`, `engagement_app_data`, `projects`).
+**Sync direction.** Salesforce is the system of record for ASQs. SFDC writes flow into `main.field_usage_dashboard.asq_uco` via a daily snapshot (~24h lag), which feeds `v_customer_engagements`. The cockpit edits **never write back to SFDC directly** — for SFDC-owned fields, edits go through the `strategist_systems_hygiene` skill in the `strategist-toolbox` plugin (which calls SFDC REST). All other edits live in app-managed UC tables (`customer_engagements_manual`, `customer_engagement_app_data`, `projects`).
 
 ### Goal end-state: Autoscaling Lakebase Postgres
 
 The current UC Delta + DBSQL write path is **interim**. The target end-state for app-managed state is **autoscaling Lakebase Postgres** — Databricks-native managed Postgres with scale-to-zero compute, branching, and OLTP-grade write latency. The cockpit will migrate to Lakebase Autoscaling as soon as it is GA on Central Logfood (currently it is not).
 
 Migration shape when Lakebase Autoscaling lands:
-- App-managed Delta tables (`engagement_app_data`, `projects`, optionally `engagements_manual`) move to Lakebase for OLTP-grade writes
-- Reads of `v_engagements_unified` and `asq_uco` stay on the warehouse (UC remains the analytic projection)
+- App-managed Delta tables (`customer_engagement_app_data`, `projects`, optionally `customer_engagements_manual`) move to Lakebase for OLTP-grade writes
+- Reads of `v_customer_engagements_unified` and `asq_uco` stay on the warehouse (UC remains the analytic projection)
 - A periodic Lakebase → UC reverse-sync feeds the analytic projection so dashboards and Genie keep working
 - Sync is **one-way: Lakebase → UC only**. UC → Lakebase writeback is forbidden — re-confirm at T-211 design time per SDR-4682 standing advisory [A-1]. Today this is enforced structurally: no `psycopg2`/`asyncpg` import in runtime code; the driver lives behind the `[lakebase]` extra in `pyproject.toml` (N-10 closure)
 - App auth flips back to a hybrid: App-SP for Lakebase writes + OBO for UC reads (matches the original design intent)

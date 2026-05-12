@@ -6,7 +6,7 @@ from src.backend.auth import current_user_email, current_user_token
 from src.backend.config import settings
 from src.backend.database import get_db
 from src.backend.models import Engagement
-from src.backend.repos import engagements_repo
+from src.backend.repos import customer_engagements_repo as engagements_repo
 from src.backend.schemas import EngagementCreate, EngagementOut, EngagementUpdate
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])

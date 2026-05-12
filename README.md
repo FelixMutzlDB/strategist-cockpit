@@ -73,9 +73,9 @@ The app is served by FastAPI: `/api/*` hits the backend, everything else falls t
 
 | Asset | Type | Description |
 |-------|------|-------------|
-| `home_felix_mutzl.strategist_canvas.engagement_details` | Delta table | Strategist engagement data (from CSV) |
-| `home_felix_mutzl.strategist_canvas.v_engagements_unified` | View | Engagements joined with ASQ + accounts + revenue |
-| `home_felix_mutzl.strategist_canvas.engagements` | View | Pre-existing strategist-to-account mapping |
+| `main.field_strategist_cockpit.customer_engagements_manual` | Delta table | Orphan customer engagements (no SFDC ASQ); write target of the cockpit |
+| `main.field_strategist_cockpit.v_customer_engagements_unified` | View | Customer engagements joined with ASQ + accounts + revenue |
+| `main.field_strategist_cockpit.v_customer_engagements` | View | UNION of SFDC ASQs (from `asq_uco`) and manual orphans |
 | `main.gtm_gold.rpt_c360_overview_unpivoted` | Table | Account revenue/consumption per period |
 | Strategist Impact Dashboard (Felix) | Lakeview | Built via `scripts/build_dashboard.py` — not yet embedded in the app (see backlog T-201) |
 | Strategist Cockpit Genie | Genie Space | Not yet embedded in the app |

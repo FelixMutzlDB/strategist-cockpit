@@ -37,7 +37,7 @@ class TestDatabricksSQL:
         cursor.close()
         conn.close()
 
-    def test_engagement_details_table_exists(self):
+    def test_customer_engagements_manual_table_exists(self):
         from databricks.sql import connect
 
         host = os.environ["DATABRICKS_HOST"].replace("https://", "")
@@ -50,9 +50,9 @@ class TestDatabricksSQL:
             access_token=token,
         )
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM home_felix_mutzl.strategist_canvas.engagement_details")
+        cursor.execute("SELECT COUNT(*) FROM main.field_strategist_cockpit.customer_engagements_manual")
         count = cursor.fetchone()[0]
-        assert count > 0
+        assert count >= 0
         cursor.close()
         conn.close()
 
@@ -69,7 +69,7 @@ class TestDatabricksSQL:
             access_token=token,
         )
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM home_felix_mutzl.strategist_canvas.v_engagements_unified LIMIT 1")
+        cursor.execute("SELECT COUNT(*) FROM main.field_strategist_cockpit.v_customer_engagements_unified LIMIT 1")
         count = cursor.fetchone()[0]
         assert count >= 0
         cursor.close()
