@@ -1024,6 +1024,52 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-213 ---
+    ,
+    # --- T-212 outcome tags ---
+    {
+      "name": "ds_activity_impact_tags",
+      "displayName": "activity_impact_tags",
+      "queryLines": [
+        "WITH unified AS (\n",
+        "  SELECT category, id, strategist_email, fy, quarter, title\n",
+        "  FROM main.field_strategist_cockpit.v_engagement_categories_unified\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "),\n",
+        "keyed AS (\n",
+        "  SELECT\n",
+        "    u.category,\n",
+        "    u.id AS activity_id,\n",
+        "    u.strategist_email,\n",
+        "    u.fy,\n",
+        "    u.quarter,\n",
+        "    u.title,\n",
+        "    CASE u.category\n",
+        "      WHEN 'customer'   THEN CONCAT('asq:',        u.id)\n",
+        "      WHEN 'evangelism' THEN CONCAT('evangelism:', u.id)\n",
+        "      WHEN 'initiative' THEN CONCAT('initiative:', u.id)\n",
+        "      ELSE CONCAT(u.category, ':', u.id)\n",
+        "    END AS activity_key\n",
+        "  FROM unified u\n",
+        ")\n",
+        "SELECT\n",
+        "  k.category,\n",
+        "  k.activity_id,\n",
+        "  k.activity_key,\n",
+        "  k.strategist_email,\n",
+        "  k.fy,\n",
+        "  k.quarter,\n",
+        "  k.title,\n",
+        "  tag AS impact_tag\n",
+        "FROM keyed k\n",
+        "INNER JOIN main.field_strategist_cockpit.activity_app_data a\n",
+        "  ON a.category = k.category\n",
+        " AND a.strategist_email = k.strategist_email\n",
+        " AND a.activity_key = k.activity_key\n",
+        "LATERAL VIEW EXPLODE(a.impact_tags) t AS tag\n",
+        "WHERE tag IS NOT NULL\n"
+      ]
+    }
+    # --- end T-212 ---
   ],
   "pages": [
     {
@@ -1568,6 +1614,123 @@ SERIALIZED_DASHBOARD: dict = {
             "height": 5
           }
         }
+        ,
+        # --- T-212 outcome tags ---
+        {
+          "widget": {
+            "name": "kpi_outcome_mix",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity_impact_tags",
+                  "fields": [
+                    {
+                      "name": "impact_tag",
+                      "expression": "`impact_tag`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(*)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "impact_tag",
+                  "scale": {"type": "categorical"},
+                  "displayName": "Outcome tag"
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "scale": {"type": "quantitative"},
+                  "displayName": "Count"
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Outcome mix (all categories)",
+                "showDescription": True,
+                "description": "Counts of qualitative tags across all activity categories (T-212)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_outcomes_by_category",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity_impact_tags",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "impact_tag",
+                      "expression": "`impact_tag`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(*)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "category",
+                  "scale": {"type": "categorical"},
+                  "displayName": "Category"
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "scale": {
+                    "type": "quantitative",
+                    "stackMode": "percent"
+                  },
+                  "displayName": "Share of outcomes"
+                },
+                "color": {
+                  "fieldName": "impact_tag",
+                  "scale": {"type": "categorical"},
+                  "legend": {"position": "bottom"}
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Outcomes by category (100% stacked)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 6,
+            "height": 5
+          }
+        }
+        # --- end T-212 ---
       ],
       "pageType": "PAGE_TYPE_CANVAS"
     },
@@ -3392,6 +3555,79 @@ SERIALIZED_DASHBOARD: dict = {
           }
         }
         # --- end T-213 ---
+        ,
+        # --- T-212 outcome tags ---
+        {
+          "widget": {
+            "name": "tbl_top_outcomes_focus",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity_impact_tags",
+                  "fields": [
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "fy",
+                      "expression": "`fy`"
+                    },
+                    {
+                      "name": "impact_tag",
+                      "expression": "`impact_tag`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(*)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "title",
+                    "displayName": "Activity",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "fy",
+                    "displayName": "FY",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "impact_tag",
+                    "displayName": "Outcome tag",
+                    "type": "string"
+                  },
+                  {
+                    "fieldName": "count(*)",
+                    "displayName": "Tag instances",
+                    "type": "integer"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Top outcomes per Focus account / activity"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 64,
+            "width": 6,
+            "height": 8
+          }
+        }
+        # --- end T-212 ---
       ],
       "pageType": "PAGE_TYPE_CANVAS"
     },

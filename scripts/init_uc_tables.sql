@@ -37,19 +37,34 @@ CREATE TABLE IF NOT EXISTS customer_engagements_manual (
 USING DELTA
 TBLPROPERTIES (delta.enableChangeDataFeed = true);
 
--- App-private overlay: per-customer-engagement annotations the strategist
--- owns (next steps, related documents). Joined onto
--- v_customer_engagements_unified at read time. Tenancy enforced by
--- `strategist_email`. Renamed from `engagement_app_data` under T-215.
-CREATE TABLE IF NOT EXISTS customer_engagement_app_data (
-  engagement_key  STRING NOT NULL,        -- composite key: asq_id OR "manual:{id}"
+-- --- T-212 impact tags overlay ---
+-- One unified per-activity annotation table replacing the (never used)
+-- ``customer_engagement_app_data``. Keyed by (category, activity_key,
+-- strategist_email) so a single overlay row exists per strategist per
+-- (category, activity) pair across all five engagement categories
+-- (customer / evangelism / initiative / planning / exec_meeting).
+--
+-- ``activity_key`` is a category-aware string: ``asq:<id>`` /
+-- ``manual:<id>`` for customer engagements, ``evangelism:<id>`` for
+-- evangelism events, etc. The tag enum is enforced at the Pydantic edge
+-- (Delta does not support CHECK on ARRAY elements).
+--
+-- Drop the dormant ``customer_engagement_app_data`` in the same
+-- migration — it was never written to and is superseded by this overlay.
+DROP TABLE IF EXISTS customer_engagement_app_data;
+
+CREATE TABLE IF NOT EXISTS activity_app_data (
+  category         STRING NOT NULL,         -- 'customer'|'evangelism'|'initiative'|'planning'|'exec_meeting'
+  activity_key     STRING NOT NULL,         -- 'asq:<id>'|'manual:<id>'|'evangelism:<id>'|...
   strategist_email STRING NOT NULL,
-  next_steps      STRING,
-  related_documents STRING,
-  updated_at      TIMESTAMP,
-  CONSTRAINT pk_customer_engagement_app_data PRIMARY KEY (engagement_key, strategist_email)
+  impact_tags      ARRAY<STRING>,
+  impact_notes     STRING,
+  updated_at       TIMESTAMP,
+  CONSTRAINT pk_activity_app_data PRIMARY KEY (category, activity_key, strategist_email)
 )
-USING DELTA;
+USING DELTA
+TBLPROPERTIES (delta.enableChangeDataFeed = true);
+-- --- end T-212 ---
 
 -- Project gallery: the read+write store for the Gallery page.
 -- F-TM-1 row filter: list/get filtered by strategist_email; delete gated by
