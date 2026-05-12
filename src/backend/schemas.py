@@ -21,6 +21,34 @@ EngagementStatus = Literal[
 ]
 ProjectCategory = Literal["Presentation", "Application", "Document", "Other"]
 
+# T-212: closed 10-tag enum for qualitative outcomes across all five
+# activity categories. Validation lives at the Pydantic edge (Delta has no
+# CHECK on array elements). Order is the canonical render order in the UI.
+ImpactTag = Literal[
+    "blocker_cleared",
+    "exec_intro",
+    "cxo_engaged",
+    "poc_unlocked",
+    "competitor_displaced",
+    "uco_advanced",
+    "product_introduced",
+    "roadmap_influenced",
+    "evangelism_landed",
+    "team_enabled",
+]
+IMPACT_TAGS: tuple[str, ...] = (
+    "blocker_cleared",
+    "exec_intro",
+    "cxo_engaged",
+    "poc_unlocked",
+    "competitor_displaced",
+    "uco_advanced",
+    "product_introduced",
+    "roadmap_influenced",
+    "evangelism_landed",
+    "team_enabled",
+)
+
 _FY_PATTERN = r"^FY\d{2}$"
 _URL_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -52,11 +80,31 @@ class EngagementBase(BaseModel):
     next_steps: str | None = Field(default=None, max_length=10000)
     # Comma-separated Salesforce Use Case Object IDs, e.g. "UCO-1234, UCO-5678".
     uco_ids: str | None = Field(default=None, max_length=500)
+    # T-212: qualitative outcome tags stored in the activity_app_data overlay.
+    # Closed 10-tag enum; the validator below rejects unknown tags and
+    # duplicates (case-sensitive). Empty list is allowed.
+    impact_tags: list[ImpactTag] = Field(default_factory=list)
+    impact_notes: str | None = Field(default=None, max_length=4000)
 
     @field_validator("asq_url", mode="before")
     @classmethod
     def _check_asq_url(cls, v: str | None) -> str | None:
         return _validate_optional_url(v)
+
+    @field_validator("impact_tags", mode="before")
+    @classmethod
+    def _check_impact_tags(cls, v):
+        # ``None`` from the wire is normalised to ``[]`` — clients sending
+        # ``impact_tags=null`` should not 422.
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise ValueError("impact_tags must be a list")
+        if len(v) != len(set(v)):
+            raise ValueError("impact_tags contains duplicate values")
+        # Unknown-tag rejection is handled by the Literal type below — this
+        # validator only catches duplicates which Pydantic does not.
+        return v
 
 
 class EngagementCreate(EngagementBase):
