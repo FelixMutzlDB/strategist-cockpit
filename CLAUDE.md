@@ -12,14 +12,16 @@ A Databricks App for a single Data & AI Strategist to track their portfolio of e
 Source of truth for intent: [Vibing Dev Scribble → Strategist Cockpit tab](https://docs.google.com/document/d/1dpzA3kJIRBArS92Shp8-X6Se9YbWv78ospi-aybRgOQ/edit?tab=t.9kpatqkpbwru). Sibling effort: the `strategist-toolbox` tab in the same doc (STRIDE qualification, "talk to my agent first" Slack vision).
 
 ## Current state
-- Pages shipped: Home, Canvas, Engagements (merged former `/impact` + data-entry), Gallery. `StrategoChat` floats on all pages.
-- Engagements: full CRUD, global search + FY/type/status dropdowns + per-column filters + sort + view/edit/delete actions, KPI tiles, quarter bar chart.
+- Pages shipped: Home, Canvas, Engagements (CRUD + filters + outcome tags), Gallery, **Impact (`/impact` — embedded Lakeview dashboard)**, **Ask (`/ask` — embedded Genie space)**. `StrategoChat` floats on all pages.
+- Engagements: full CRUD, global search + FY/type/status dropdowns + per-column filters + sort + view/edit/delete actions, KPI tiles, quarter bar chart, **plus T-212 Outcomes section (10-tag closed enum + notes, reusable `ImpactTagPicker`)**.
 - Canvas: 5 archetypes (Organizer/Builder/Product/Industry/Advisor) link to slide deck; Goal block lists #1 AI/BI Genie, #2 Lakebase. Clicking a box → keyword-matched summary dialog.
-- AI/BI Dashboard: built via `scripts/build_dashboard.py` (5 pages: Executive / Focus / One-off / Impact / Filters) — lives in Databricks, **not yet embedded in the app**.
-- Genie Space: "Strategist Cockpit Genie" exists in workspace — **not yet embedded in the app**.
-- Tests: `tests/` has unit tests for engagements, projects, canvas, chat, health + integration tests for SQL warehouse / KA endpoint / dashboard / Genie (skipped without creds).
-- Git: active `main` branch on `github.com/felix-mutzl_data/strategist-cockpit` with Dependabot enabled. Major commits in logical chunks, not one megacommit.
-- Built by Cursor originally; we're shifting ownership to Claude Code.
+- AI/BI Dashboard: built via `scripts/build_dashboard.py` (35 datasets, 9 pages — Executive Summary v2 with 5 pillar tile-groups + Customer Impact + Focus + One-off + Filters + Evangelism reach + Initiative outcomes + Relationship depth + Portfolio readiness). Embedded in the app at `/impact`. Republish with `python scripts/build_dashboard.py --profile logfood`.
+- Genie Space: "Strategist Cockpit Genie" embedded at `/ask` via `genie_space_id` config.
+- Activity tables (logfood, T-216): `evangelism_events`, `initiatives`, `focused_account_planning`, `exec_meetings` + `v_engagement_categories_unified`. Backfill via `scripts/migrate_strategist_activity_from_sheet.py` (T-217 — single-file migrator, dry-run by default).
+- Overlay (logfood, T-212): unified `activity_app_data` keyed by `(category, activity_key, strategist_email)` with 10-tag closed enum. Replaces the dormant `customer_engagement_app_data`.
+- Tests: `tests/` has 201 passing tests covering engagements, projects, canvas, chat, security headers, OBO auth, audit logging, DBSQL repos, impact tags, migration parsers/idempotency/collision; integration tests skipped without creds.
+- Git: active `main` branch on `github.com/felix-mutzl_data/strategist-cockpit` (origin) with mirror at `FelixMutzlDB/strategist-cockpit`. Both remotes dual-pushed after every phase. Dependabot enabled.
+- Built by Cursor originally; ownership lives with Claude Code now.
 
 ## Read order
 - New to the project? Read this file, then `docs/architecture.md`, then `src/backend/main.py` and `src/ui/src/App.tsx`.
@@ -60,8 +62,8 @@ databricks apps deploy strategist-cockpit --source-code-path .
 ## Architecture (10-sec version)
 - FastAPI (`src/backend/main.py`).
 - **Goal data layer (target end-state):** **Autoscaling Lakebase Postgres** as the OLTP store for app-managed state (scale-to-zero, branching, OLTP-grade write latency). Tracked as T-211 — blocked on Lakebase Autoscaling reaching GA on Central Logfood.
-- **Interim data layer (this deployment):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*` accessed via Databricks SQL warehouse + the `databricks-sql-connector`, OBO. Reads come from `v_customer_engagements_unified` (joined SFDC + manual + revenue); writes go to `customer_engagements_manual` (orphans), `customer_engagement_app_data` (app-private overlay), and `projects` (gallery — both new Delta tables on first deploy). Tracked as T-206.
-- **Today's code:** SQLAlchemy 2 + SQLite for local dev only. Production code on UC + DBSQL is in flight under T-206.
+- **Interim data layer (shipped):** Unity Catalog Delta tables under `main.field_strategist_cockpit.*` accessed via Databricks SQL warehouse + the `databricks-sql-connector`, OBO. `DATA_BACKEND=dbsql` for prod (logfood), `DATA_BACKEND=sqlite` for local dev. Reads come from `v_customer_engagements_unified`; writes go to `customer_engagements_manual` (orphans), `activity_app_data` (T-212 unified overlay), `projects` (gallery).
+- **OBO live (T-205):** `src/backend/auth.py` reads `X-Forwarded-Access-Token` + `X-Forwarded-Email` from the Databricks Apps proxy; dev fallback to `DATABRICKS_TOKEN` + `dev@local`.
 - Routers under `src/backend/routers/`: `engagements`, `projects`, `canvas`, `chat`. All mounted at `/api/*`.
 - React 18 + Vite + shadcn/ui + Tailwind. shadcn primitives under `src/ui/src/components/ui/`, custom in `components/`, pages in `pages/`.
 - FastAPI serves the built SPA from `static/` at the root; `/api/*` wins before the SPA catch-all.
@@ -92,9 +94,9 @@ Read sources:
 - `main.field_usage_dashboard.asq_uco` (daily SFDC snapshot, owned by Field Usage Dashboard team)
 - `main.gtm_gold.rpt_c360_overview_unpivoted` (revenue per account per period)
 
-App-managed write targets (created on first deploy):
+App-managed write targets:
 - `main.field_strategist_cockpit.customer_engagements_manual` (INSERT new orphans)
-- `main.field_strategist_cockpit.customer_engagement_app_data` (Delta — app-private overlay: `next_steps`, `related_documents`, etc.; tenancy by `strategist_email`)
+- `main.field_strategist_cockpit.activity_app_data` (Delta — unified overlay across all 5 activity categories: keyed by `(category, activity_key, strategist_email)`, holds `impact_tags ARRAY<STRING>` + `impact_notes`. Replaces dormant `customer_engagement_app_data` as of T-212, 2026-05-13)
 - `main.field_strategist_cockpit.projects` (Delta — gallery items; `created_by_email` for ownership)
 
 > Migration to `main.field_strategist_cockpit.*` completed 2026-04-29 (see Strategist Cockpit Migration.md in Felix's Drive). The UC Delta + DBSQL story is **interim**; the goal end-state is autoscaling Lakebase Postgres for app-managed state once it's GA on Central Logfood — see backlog T-211.
