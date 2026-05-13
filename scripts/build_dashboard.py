@@ -39,6 +39,300 @@ ONEOFF_WINDOW_QUARTERS = (1, 4)  # engagement_quarter +1 .. +4 inclusive
 FOCUS_WINDOW_FYS = (0, 1)        # engagement_FY .. engagement_FY+1 inclusive
 
 
+# --- T-224 old layout (rollback) -------------------------------------------
+# The pre-T-224 Executive Summary page was a 6-tile customer-only view
+# (Total Accounts, Focus Accounts, One-off Engagements, Territories, AE
+# Partners, Total Engagements) plus the timeline / format / territory
+# charts and the T-212/T-214 outcome panels. T-224 replaces it with a
+# 5-pillar summary. The previous layout is preserved here for one
+# release per spec — if Felix wants the old view back, splice this list
+# in place of the p_exec_summary page's "layout" value. The datasets it
+# references (ds_impact_kpis, ds_timeline, ds_engagement_format_mix,
+# ds_territory, ds_activity_impact_tags, ds_influenced_revenue_windowed)
+# all still exist in SERIALIZED_DASHBOARD["datasets"], so the swap is
+# layout-only.
+_OLD_P_EXEC_SUMMARY_LAYOUT_ROLLBACK: list = [
+    {
+      "widget": {
+        "name": "header_exec",
+        "multilineTextboxSpec": {
+          "lines": [
+            "# Strategist Impact Dashboard\n",
+            "\n",
+            "Data & AI Strategist portfolio overview — measuring activity and impact across Focus and One-off engagements.\n",
+            "Inspired by the [Impact Players](https://thewisemangroup.com/books/impact-players/) framework: measuring **what changed** because of what you did."
+          ]
+        }
+      },
+      "position": {"x": 0, "y": 0, "width": 6, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_total_accounts",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(total_accounts)", "expression": "SUM(`total_accounts`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(total_accounts)"}},
+          "frame": {"showTitle": True, "title": "Total Accounts", "showDescription": True, "description": "All accounts in portfolio"}
+        }
+      },
+      "position": {"x": 0, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_focus_accounts",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(focus_accounts)", "expression": "SUM(`focus_accounts`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(focus_accounts)"}},
+          "frame": {"showTitle": True, "title": "Focus Accounts", "showDescription": True, "description": "Multi-quarter deep engagements"}
+        }
+      },
+      "position": {"x": 1, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_oneoff_engagements",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(oneoff_engagements)", "expression": "SUM(`oneoff_engagements`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(oneoff_engagements)"}},
+          "frame": {"showTitle": True, "title": "One-off Engagements", "showDescription": True, "description": "Targeted, topic-specific"}
+        }
+      },
+      "position": {"x": 2, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_territories",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(territories_covered)", "expression": "SUM(`territories_covered`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(territories_covered)"}},
+          "frame": {"showTitle": True, "title": "Territories", "showDescription": True, "description": "Areas covered"}
+        }
+      },
+      "position": {"x": 3, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_ae_partners",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(ae_partners)", "expression": "SUM(`ae_partners`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(ae_partners)"}},
+          "frame": {"showTitle": True, "title": "AE Partners", "showDescription": True, "description": "Account Executives supported"}
+        }
+      },
+      "position": {"x": 4, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "kpi_total_engagements",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_impact_kpis",
+          "fields": [{"name": "sum(total_engagements)", "expression": "SUM(`total_engagements`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {"value": {"fieldName": "sum(total_engagements)"}},
+          "frame": {"showTitle": True, "title": "Total Engagements", "showDescription": True, "description": "All engagement records"}
+        }
+      },
+      "position": {"x": 5, "y": 2, "width": 1, "height": 2}
+    },
+    {
+      "widget": {
+        "name": "chart_timeline",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_timeline",
+          "fields": [
+            {"name": "fy", "expression": "`fy`"},
+            {"name": "sum(engagement_count)", "expression": "SUM(`engagement_count`)"},
+            {"name": "eng_type", "expression": "`eng_type`"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+            "y": {"fieldName": "sum(engagement_count)", "scale": {"type": "quantitative", "stackMode": "stacked"}},
+            "color": {"fieldName": "eng_type", "scale": {"type": "categorical"}, "legend": {"position": "bottom"}}
+          },
+          "frame": {"showTitle": True, "title": "Engagements Over Time"}
+        }
+      },
+      "position": {"x": 0, "y": 4, "width": 3, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "chart_format_mix",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_engagement_format_mix",
+          "fields": [
+            {"name": "eng_format", "expression": "`eng_format`"},
+            {"name": "sum(cnt)", "expression": "SUM(`cnt`)"},
+            {"name": "eng_type", "expression": "`eng_type`"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "eng_format", "scale": {"type": "categorical"}},
+            "y": {"fieldName": "sum(cnt)", "scale": {"type": "quantitative", "stackMode": "stacked"}},
+            "color": {"fieldName": "eng_type", "scale": {"type": "categorical"}, "legend": {"position": "bottom"}}
+          },
+          "frame": {"showTitle": True, "title": "Engagement Format Mix"}
+        }
+      },
+      "position": {"x": 3, "y": 4, "width": 3, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "chart_territory",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_territory",
+          "fields": [
+            {"name": "territory_area", "expression": "`territory_area`"},
+            {"name": "sum(engagement_count)", "expression": "SUM(`engagement_count`)"},
+            {"name": "eng_type", "expression": "`eng_type`"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "territory_area", "scale": {"type": "categorical"}},
+            "y": {"fieldName": "sum(engagement_count)", "scale": {"type": "quantitative", "stackMode": "stacked"}},
+            "color": {"fieldName": "eng_type", "scale": {"type": "categorical"}, "legend": {"position": "bottom"}}
+          },
+          "frame": {"showTitle": True, "title": "Engagements by Territory"}
+        }
+      },
+      "position": {"x": 0, "y": 9, "width": 3, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "chart_territory_rev",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_territory",
+          "fields": [
+            {"name": "territory_area", "expression": "`territory_area`"},
+            {"name": "sum(total_dbu_dollars)", "expression": "SUM(`total_dbu_dollars`)"},
+            {"name": "eng_type", "expression": "`eng_type`"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "territory_area", "scale": {"type": "categorical"}},
+            "y": {
+              "fieldName": "sum(total_dbu_dollars)",
+              "scale": {"type": "quantitative", "stackMode": "stacked"},
+              "format": {"type": "number-currency", "currencyCode": "USD", "abbreviation": "compact-long", "decimalPlaces": {"type": "exact", "places": 0}}
+            },
+            "color": {"fieldName": "eng_type", "scale": {"type": "categorical"}, "legend": {"position": "bottom"}}
+          },
+          "frame": {"showTitle": True, "title": "Revenue by Territory ($)"}
+        }
+      },
+      "position": {"x": 3, "y": 9, "width": 3, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "kpi_outcome_mix",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_activity_impact_tags",
+          "fields": [
+            {"name": "impact_tag", "expression": "`impact_tag`"},
+            {"name": "count(*)", "expression": "COUNT(*)"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "impact_tag", "scale": {"type": "categorical"}, "displayName": "Outcome tag"},
+            "y": {"fieldName": "count(*)", "scale": {"type": "quantitative"}, "displayName": "Count"}
+          },
+          "frame": {"showTitle": True, "title": "Outcome mix (all categories)", "showDescription": True, "description": "Counts of qualitative tags across all activity categories (T-212)"}
+        }
+      },
+      "position": {"x": 0, "y": 14, "width": 6, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "chart_outcomes_by_category",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_activity_impact_tags",
+          "fields": [
+            {"name": "category", "expression": "`category`"},
+            {"name": "impact_tag", "expression": "`impact_tag`"},
+            {"name": "count(*)", "expression": "COUNT(*)"}
+          ],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 3, "widgetType": "bar",
+          "encodings": {
+            "x": {"fieldName": "category", "scale": {"type": "categorical"}, "displayName": "Category"},
+            "y": {"fieldName": "count(*)", "scale": {"type": "quantitative", "stackMode": "percent"}, "displayName": "Share of outcomes"},
+            "color": {"fieldName": "impact_tag", "scale": {"type": "categorical"}, "legend": {"position": "bottom"}}
+          },
+          "frame": {"showTitle": True, "title": "Outcomes by category (100% stacked)"}
+        }
+      },
+      "position": {"x": 0, "y": 19, "width": 6, "height": 5}
+    },
+    {
+      "widget": {
+        "name": "kpi_influenced_revenue_windowed",
+        "queries": [{"name": "main_query", "query": {
+          "datasetName": "ds_influenced_revenue_windowed",
+          "fields": [{"name": "sum(total_influenced_revenue_windowed)", "expression": "SUM(`total_influenced_revenue_windowed`)"}],
+          "disaggregated": False
+        }}],
+        "spec": {
+          "version": 2, "widgetType": "counter",
+          "encodings": {
+            "value": {
+              "fieldName": "sum(total_influenced_revenue_windowed)",
+              "format": {"type": "number-currency", "currencyCode": "USD", "abbreviation": "compact-long", "decimalPlaces": {"type": "exact", "places": 1}}
+            }
+          },
+          "frame": {"showTitle": True, "title": "Total influenced revenue (windowed)", "showDescription": True, "description": "$DBU in attribution window: Focus = FY..FY+1, One-off = quarter +1..+4. T-214."}
+        }
+      },
+      "position": {"x": 0, "y": 24, "width": 6, "height": 3}
+    },
+]
+# --- end T-224 old layout (rollback) ---
+
+
 # -- Dashboard definition ----------------------------------------------------
 SERIALIZED_DASHBOARD: dict = {
   "datasets": [
@@ -1612,44 +1906,328 @@ SERIALIZED_DASHBOARD: dict = {
       ]
     }
     # --- end T-223 ---
+    ,
+    # --- T-224 portfolio pillars dataset ---
+    # One row per (strategist_email, fy) covering all five pillars. LEFT JOINs
+    # each pillar aggregate to a universe of (strategist, fy) drawn from
+    # customer engagements, evangelism events, initiatives and exec_meetings
+    # so a strategist with rows in ANY pillar surfaces a row (others are 0).
+    # COALESCE every measure to 0 so NULL never bleeds into a counter widget.
+    #
+    # Current-state ("now") metrics (cxo_gap_count, focus_without_plan_count,
+    # open_asqs_needing_attention_count, stalled_initiatives_count) are NOT
+    # FY-bound — they describe the portfolio today. They are joined by
+    # strategist_email only, so every FY row shows the same value. Felix's
+    # tile reads the same number regardless of which FY filter is active;
+    # this is intentional (a Monday-morning worklist count, not a history).
+    #
+    # Customer Impact pillar:
+    #   - total_influenced_revenue: windowed attribution (T-214) — Focus
+    #     FY..FY+1, One-off engagement_quarter+1..+4. UNION dedupes account+
+    #     quarter pairs that fall in both windows for the same account.
+    #   - uco_advances_count: SUM(stage_advance_within_90d) from the T-213
+    #     velocity view, grouped by the engagement's FY (not the advance's FY).
+    #   - tagged_outcomes_count: rows in v_engagement_categories_unified with
+    #     category='customer' that have a matching activity_app_data row.
+    #
+    # Evangelism Reach pillar: SUMs from evangelism_events, summed by FY.
+    # Initiative Outcomes pillar: SUMs from initiatives; cxo_sponsored_count
+    #   counts initiatives with >=1 linked exec_meeting where is_cxo=TRUE.
+    # Relationship Depth pillar: COUNT DISTINCT from exec_meetings (FY derived
+    #   from meeting_date via Feb->Jan rule); cxo_gap_count is current-state.
+    # Portfolio Readiness pillar: 3 worklist counts (T-223), current-state.
+    {
+      "name": "ds_portfolio_pillars",
+      "displayName": "portfolio_pillars",
+      "queryLines": [
+        "WITH\n",
+        # FY universe = union of FYs across all four base sources per strategist.
+        "fy_universe AS (\n",
+        "  SELECT strategist_email,\n",
+        "         NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "  UNION\n",
+        "  SELECT strategist_email, fy\n",
+        "  FROM main.field_strategist_cockpit.evangelism_events\n",
+        "  WHERE strategist_email IS NOT NULL AND fy IS NOT NULL\n",
+        "  UNION\n",
+        "  SELECT strategist_email, fy\n",
+        "  FROM main.field_strategist_cockpit.initiatives\n",
+        "  WHERE strategist_email IS NOT NULL AND fy IS NOT NULL\n",
+        "  UNION\n",
+        "  SELECT strategist_email,\n",
+        "         CONCAT('FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0')) AS fy\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE strategist_email IS NOT NULL AND meeting_date IS NOT NULL\n",
+        "),\n",
+        "universe AS (\n",
+        "  SELECT DISTINCT strategist_email, fy\n",
+        "  FROM fy_universe\n",
+        "  WHERE fy IS NOT NULL AND REGEXP_LIKE(fy, '^FY[0-9]{2}$')\n",
+        "),\n",
+        # Customer Impact: windowed influenced revenue (mirrors ds_influenced_revenue_windowed)
+        "eng AS (\n",
+        "  SELECT src.strategist_email, src.account_id,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "  WHERE src.account_id IS NOT NULL AND src.strategist_email IS NOT NULL\n",
+        "),\n",
+        "focus_target_qtrs AS (\n",
+        "  SELECT DISTINCT f.strategist_email, f.fy_clean AS fy, f.account_id, c.usage_date_fiscal_quarter_start\n",
+        "  FROM (\n",
+        "    SELECT DISTINCT strategist_email, account_id, fy_clean,\n",
+        "           CAST('20'||SUBSTRING(fy_clean,3,2) AS INT) AS engagement_fy_int\n",
+        "    FROM eng WHERE engagement_type='Focus' AND REGEXP_LIKE(fy_clean,'^FY[0-9]{2}$')\n",
+        "  ) f\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = f.account_id\n",
+        "   AND c.fiscal_year BETWEEN f.engagement_fy_int AND f.engagement_fy_int + 1\n",
+        "   AND c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "),\n",
+        "oneoff_target_qtrs AS (\n",
+        "  SELECT DISTINCT o.strategist_email, o.fy_clean AS fy, o.account_id, c.usage_date_fiscal_quarter_start\n",
+        "  FROM (\n",
+        "    SELECT DISTINCT strategist_email, account_id, fy_clean, quarter,\n",
+        "      make_date(CAST('20'||SUBSTRING(quarter,3,2) AS INT)-1,\n",
+        "        CASE SUBSTRING(quarter,6,1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1) AS engagement_quarter_start\n",
+        "    FROM eng WHERE engagement_type='One-off' AND REGEXP_LIKE(quarter,'^FY[0-9]{2}Q[1-4]$')\n",
+        "  ) o\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = o.account_id\n",
+        "   AND c.usage_date_fiscal_quarter_start BETWEEN add_months(o.engagement_quarter_start, 3) AND add_months(o.engagement_quarter_start, 12)\n",
+        "   AND c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "),\n",
+        "all_periods AS (\n",
+        "  SELECT strategist_email, fy, account_id, usage_date_fiscal_quarter_start FROM focus_target_qtrs\n",
+        "  UNION\n",
+        "  SELECT strategist_email, fy, account_id, usage_date_fiscal_quarter_start FROM oneoff_target_qtrs\n",
+        "),\n",
+        "customer_revenue AS (\n",
+        "  SELECT p.strategist_email, p.fy,\n",
+        "         ROUND(SUM(c.dbu_dollars)) AS total_influenced_revenue\n",
+        "  FROM all_periods p\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = p.account_id\n",
+        "   AND c.usage_date_fiscal_quarter_start = p.usage_date_fiscal_quarter_start\n",
+        "  WHERE c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "  GROUP BY p.strategist_email, p.fy\n",
+        "),\n",
+        # Customer Impact: UCO 90d advances per FY (T-213).
+        "uco_advances AS (\n",
+        "  SELECT strategist_email,\n",
+        "         NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy,\n",
+        "         SUM(CASE WHEN stage_advance_within_90d = TRUE THEN 1 ELSE 0 END) AS uco_advances_count\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagement_uco_velocity\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "  GROUP BY strategist_email,\n",
+        "           NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(fy, '')), '-', ''), '[\\r\\n]', ''), '')\n",
+        "),\n",
+        # Customer Impact: tagged outcomes (T-212) restricted to customer activities.
+        "customer_tags AS (\n",
+        "  SELECT u.strategist_email, u.fy, COUNT(*) AS tagged_outcomes_count\n",
+        "  FROM main.field_strategist_cockpit.v_engagement_categories_unified u\n",
+        "  INNER JOIN main.field_strategist_cockpit.activity_app_data a\n",
+        "    ON a.category = u.category\n",
+        "   AND a.strategist_email = u.strategist_email\n",
+        "   AND a.activity_key = CONCAT('asq:', u.id)\n",
+        "  WHERE u.category = 'customer' AND u.strategist_email IS NOT NULL\n",
+        "  GROUP BY u.strategist_email, u.fy\n",
+        "),\n",
+        # Evangelism Reach: delivered + reach + next-30d planned (T-219).
+        "evangelism AS (\n",
+        "  SELECT strategist_email, fy,\n",
+        "         SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS events_delivered,\n",
+        "         SUM(CASE WHEN status = 'delivered' THEN COALESCE(views, 0) ELSE 0 END)\n",
+        "           + SUM(CASE WHEN status = 'delivered' THEN COALESCE(participants, 0) ELSE 0 END) AS total_reach,\n",
+        "         SUM(CASE WHEN status = 'planned' AND event_date IS NOT NULL\n",
+        "                       AND event_date >= current_date()\n",
+        "                       AND event_date <= date_add(current_date(), 30)\n",
+        "                  THEN 1 ELSE 0 END) AS events_planned_next_30d\n",
+        "  FROM main.field_strategist_cockpit.evangelism_events\n",
+        "  WHERE strategist_email IS NOT NULL AND fy IS NOT NULL\n",
+        "  GROUP BY strategist_email, fy\n",
+        "),\n",
+        # Initiative Outcomes: active/complete + CXO sponsorship via exec_meetings (T-221).
+        "initiatives_cxo AS (\n",
+        "  SELECT initiative_id, COUNT(*) AS cxo_meeting_count\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE initiative_id IS NOT NULL AND is_cxo = TRUE\n",
+        "  GROUP BY initiative_id\n",
+        "),\n",
+        "initiatives_pillar AS (\n",
+        "  SELECT i.strategist_email, i.fy,\n",
+        "         SUM(CASE WHEN LOWER(COALESCE(i.status, '')) = 'active' THEN 1 ELSE 0 END) AS active_initiatives,\n",
+        "         SUM(CASE WHEN LOWER(COALESCE(i.status, '')) = 'complete' THEN 1 ELSE 0 END) AS completed_initiatives_fy,\n",
+        "         SUM(CASE WHEN COALESCE(em.cxo_meeting_count, 0) > 0 THEN 1 ELSE 0 END) AS cxo_sponsored_count\n",
+        "  FROM main.field_strategist_cockpit.initiatives i\n",
+        "  LEFT JOIN initiatives_cxo em ON em.initiative_id = i.id\n",
+        "  WHERE i.strategist_email IS NOT NULL AND i.fy IS NOT NULL\n",
+        "  GROUP BY i.strategist_email, i.fy\n",
+        "),\n",
+        # Relationship Depth: CXO meetings per FY (FY derived from meeting_date Feb->Jan) (T-222).
+        "relationship AS (\n",
+        "  SELECT strategist_email,\n",
+        "         CONCAT('FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0')) AS fy,\n",
+        "         COUNT(DISTINCT CASE WHEN is_cxo = TRUE THEN CONCAT(COALESCE(account_id, ''), '|', COALESCE(exec_name, '')) END) AS distinct_cxos,\n",
+        "         COUNT(DISTINCT CASE WHEN is_cxo = TRUE THEN account_id END) AS accounts_with_cxo\n",
+        "  FROM main.field_strategist_cockpit.exec_meetings\n",
+        "  WHERE strategist_email IS NOT NULL AND meeting_date IS NOT NULL\n",
+        "  GROUP BY strategist_email,\n",
+        "           CONCAT('FY', LPAD(MOD(CASE WHEN MONTH(meeting_date) >= 2 THEN YEAR(meeting_date) + 1 ELSE YEAR(meeting_date) END, 100), 2, '0'))\n",
+        "),\n",
+        # Relationship Depth: CXO gap (T-222 ds_exec_meetings_gap shape). Current-state, not FY-bound.
+        "relationship_gap AS (\n",
+        "  SELECT g.strategist_email, COUNT(DISTINCT g.account_id) AS cxo_gap_count\n",
+        "  FROM (\n",
+        "    SELECT strategist_email, account_id\n",
+        "    FROM main.field_strategist_cockpit.exec_meetings\n",
+        "    WHERE strategist_email IS NOT NULL AND account_id IS NOT NULL AND is_cxo = TRUE\n",
+        "      AND meeting_date >= DATE_SUB(current_date(), 180)\n",
+        "    GROUP BY strategist_email, account_id\n",
+        "  ) g\n",
+        "  LEFT ANTI JOIN (\n",
+        "    SELECT DISTINCT strategist_email, account_id\n",
+        "    FROM main.field_strategist_cockpit.v_customer_engagements_unified\n",
+        "    WHERE strategist_email IS NOT NULL AND account_id IS NOT NULL\n",
+        "      AND ASQ_Start_Date >= DATE_SUB(current_date(), 180)\n",
+        "  ) e ON e.strategist_email = g.strategist_email AND e.account_id = g.account_id\n",
+        "  GROUP BY g.strategist_email\n",
+        "),\n",
+        # Portfolio Readiness: T-223 worklist counts. Current-state, not FY-bound.
+        "focus_without_plan_agg AS (\n",
+        "  SELECT f.strategist_email, COUNT(*) AS focus_without_plan_count\n",
+        "  FROM (\n",
+        "    SELECT DISTINCT e.strategist_email, e.account_id\n",
+        "    FROM main.field_strategist_cockpit.v_customer_engagements_unified e\n",
+        "    WHERE e.strategist_email IS NOT NULL AND e.account_id IS NOT NULL\n",
+        "      AND NULLIF(REGEXP_REPLACE(TRIM(COALESCE(e.engagement_type, '')), '[\\r\\n]', ''), '') = 'Focus'\n",
+        "  ) f\n",
+        "  LEFT ANTI JOIN (\n",
+        "    SELECT DISTINCT strategist_email, account_id\n",
+        "    FROM main.field_strategist_cockpit.focused_account_planning\n",
+        "    WHERE strategist_email IS NOT NULL AND account_id IS NOT NULL\n",
+        "      AND session_date >= DATE_SUB(current_date(), 90)\n",
+        "  ) rp ON rp.strategist_email = f.strategist_email AND rp.account_id = f.account_id\n",
+        "  GROUP BY f.strategist_email\n",
+        "),\n",
+        "open_asqs_agg AS (\n",
+        "  SELECT strategist_email, COUNT(*) AS open_asqs_needing_attention_count\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "    AND engagement_status IN ('In Progress', 'New', 'Approved')\n",
+        "    AND (next_steps IS NULL OR LENGTH(TRIM(next_steps)) = 0)\n",
+        "    AND ASQ_Start_Date IS NOT NULL\n",
+        "    AND DATEDIFF(current_date(), ASQ_Start_Date) >= 14\n",
+        "  GROUP BY strategist_email\n",
+        "),\n",
+        "stalled_initiatives_agg AS (\n",
+        "  SELECT strategist_email, COUNT(*) AS stalled_initiatives_count\n",
+        "  FROM main.field_strategist_cockpit.initiatives\n",
+        "  WHERE strategist_email IS NOT NULL\n",
+        "    AND LOWER(COALESCE(status, '')) = 'active'\n",
+        "    AND last_activity_at IS NOT NULL\n",
+        "    AND last_activity_at < DATE_SUB(current_date(), 30)\n",
+        "  GROUP BY strategist_email\n",
+        ")\n",
+        "SELECT\n",
+        "  u.strategist_email,\n",
+        "  u.fy,\n",
+        "  COALESCE(cr.total_influenced_revenue, 0) AS total_influenced_revenue,\n",
+        "  COALESCE(uv.uco_advances_count, 0) AS uco_advances_count,\n",
+        "  COALESCE(ct.tagged_outcomes_count, 0) AS tagged_outcomes_count,\n",
+        "  COALESCE(ev.events_delivered, 0) AS events_delivered,\n",
+        "  COALESCE(ev.total_reach, 0) AS total_reach,\n",
+        "  COALESCE(ev.events_planned_next_30d, 0) AS events_planned_next_30d,\n",
+        "  COALESCE(ini.active_initiatives, 0) AS active_initiatives,\n",
+        "  COALESCE(ini.completed_initiatives_fy, 0) AS completed_initiatives_fy,\n",
+        "  COALESCE(ini.cxo_sponsored_count, 0) AS cxo_sponsored_count,\n",
+        "  COALESCE(rel.distinct_cxos, 0) AS distinct_cxos,\n",
+        "  COALESCE(rel.accounts_with_cxo, 0) AS accounts_with_cxo,\n",
+        "  COALESCE(rg.cxo_gap_count, 0) AS cxo_gap_count,\n",
+        "  COALESCE(fwp.focus_without_plan_count, 0) AS focus_without_plan_count,\n",
+        "  COALESCE(oa.open_asqs_needing_attention_count, 0) AS open_asqs_needing_attention_count,\n",
+        "  COALESCE(si.stalled_initiatives_count, 0) AS stalled_initiatives_count\n",
+        "FROM universe u\n",
+        "LEFT JOIN customer_revenue cr ON cr.strategist_email = u.strategist_email AND cr.fy = u.fy\n",
+        "LEFT JOIN uco_advances uv ON uv.strategist_email = u.strategist_email AND uv.fy = u.fy\n",
+        "LEFT JOIN customer_tags ct ON ct.strategist_email = u.strategist_email AND ct.fy = u.fy\n",
+        "LEFT JOIN evangelism ev ON ev.strategist_email = u.strategist_email AND ev.fy = u.fy\n",
+        "LEFT JOIN initiatives_pillar ini ON ini.strategist_email = u.strategist_email AND ini.fy = u.fy\n",
+        "LEFT JOIN relationship rel ON rel.strategist_email = u.strategist_email AND rel.fy = u.fy\n",
+        "LEFT JOIN relationship_gap rg ON rg.strategist_email = u.strategist_email\n",
+        "LEFT JOIN focus_without_plan_agg fwp ON fwp.strategist_email = u.strategist_email\n",
+        "LEFT JOIN open_asqs_agg oa ON oa.strategist_email = u.strategist_email\n",
+        "LEFT JOIN stalled_initiatives_agg si ON si.strategist_email = u.strategist_email\n",
+        "ORDER BY u.strategist_email, u.fy\n"
+      ]
+    }
+    # --- end T-224 portfolio pillars dataset ---
   ],
   "pages": [
     {
       "name": "p_exec_summary",
       "displayName": "Executive Summary",
       "layout": [
+        # --- T-224 portfolio pillars layout ---
+        # The Executive Summary is the only page an exec needs to see. Five
+        # tile-groups, one per strategist-portfolio pillar (Customer impact,
+        # Evangelism reach, Initiative outcomes, Relationship depth,
+        # Portfolio readiness). Each group: 3 KPI counters + a sparkline of
+        # the headline number's FY trend. All read from a single dataset
+        # (ds_portfolio_pillars) so the page loads as one warehouse query.
+        #
+        # Deep-link mechanism: Lakeview canvas widgets do not expose a
+        # native widget-onClick → page-navigation hook in the public
+        # serialized schema (as of 2026-05). Falling back to inline
+        # markdown "→ Page <name>" hints in each pillar header — users
+        # navigate via the dashboard's left-rail page tabs. Tracked as a
+        # follow-up if Lakeview adds widget-level deep-linking.
+        #
+        # FY filter + strategist filter come from the existing Global
+        # Filters page; ds_portfolio_pillars exposes both columns so the
+        # filter associativity applies cleanly.
         {
           "widget": {
-            "name": "header_exec",
+            "name": "header_exec_pillars",
             "multilineTextboxSpec": {
               "lines": [
-                "# Strategist Impact Dashboard\n",
+                "# Strategist portfolio at a glance\n",
                 "\n",
-                "Data & AI Strategist portfolio overview — measuring activity and impact across Focus and One-off engagements.\n",
-                "Inspired by the [Impact Players](https://thewisemangroup.com/books/impact-players/) framework: measuring **what changed** because of what you did."
+                "Five pillars. One page. Filter by FY (top-right) to see how the portfolio shifted year-over-year. ",
+                "Pillars left → right tell the story: **what changed for customers**, **who heard you**, **what shipped internally**, **who trusts you**, **what needs your attention now**.\n",
+                "\n",
+                "_Inspired by the [Impact Players](https://thewisemangroup.com/books/impact-players/) framework: measuring **what changed** because of what you did._"
               ]
             }
           },
-          "position": {
-            "x": 0,
-            "y": 0,
-            "width": 6,
-            "height": 2
-          }
+          "position": {"x": 0, "y": 0, "width": 6, "height": 2}
+        },
+        # --- Pillar 1: Customer impact ---
+        {
+          "widget": {
+            "name": "pillar_customer_impact_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## 1. Customer impact — what changed because of you\n",
+                "Influenced revenue (windowed), UCO stage advances, and tagged customer outcomes. **→ See full detail on the _Impact_ page.**"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 6, "height": 1}
         },
         {
           "widget": {
-            "name": "kpi_total_accounts",
+            "name": "kpi_pillar1_revenue",
             "queries": [
               {
                 "name": "main_query",
                 "query": {
-                  "datasetName": "ds_impact_kpis",
+                  "datasetName": "ds_portfolio_pillars",
                   "fields": [
-                    {
-                      "name": "sum(total_accounts)",
-                      "expression": "SUM(`total_accounts`)"
-                    }
+                    {"name": "sum(total_influenced_revenue)", "expression": "SUM(`total_influenced_revenue`)"}
                   ],
                   "disaggregated": False
                 }
@@ -1660,645 +2238,7 @@ SERIALIZED_DASHBOARD: dict = {
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "sum(total_accounts)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Total Accounts",
-                "showDescription": True,
-                "description": "All accounts in portfolio"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "kpi_focus_accounts",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_impact_kpis",
-                  "fields": [
-                    {
-                      "name": "sum(focus_accounts)",
-                      "expression": "SUM(`focus_accounts`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(focus_accounts)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Focus Accounts",
-                "showDescription": True,
-                "description": "Multi-quarter deep engagements"
-              }
-            }
-          },
-          "position": {
-            "x": 1,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "kpi_oneoff_engagements",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_impact_kpis",
-                  "fields": [
-                    {
-                      "name": "sum(oneoff_engagements)",
-                      "expression": "SUM(`oneoff_engagements`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(oneoff_engagements)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "One-off Engagements",
-                "showDescription": True,
-                "description": "Targeted, topic-specific"
-              }
-            }
-          },
-          "position": {
-            "x": 2,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "kpi_territories",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_impact_kpis",
-                  "fields": [
-                    {
-                      "name": "sum(territories_covered)",
-                      "expression": "SUM(`territories_covered`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(territories_covered)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Territories",
-                "showDescription": True,
-                "description": "Areas covered"
-              }
-            }
-          },
-          "position": {
-            "x": 3,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "kpi_ae_partners",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_impact_kpis",
-                  "fields": [
-                    {
-                      "name": "sum(ae_partners)",
-                      "expression": "SUM(`ae_partners`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(ae_partners)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "AE Partners",
-                "showDescription": True,
-                "description": "Account Executives supported"
-              }
-            }
-          },
-          "position": {
-            "x": 4,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "kpi_total_engagements",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_impact_kpis",
-                  "fields": [
-                    {
-                      "name": "sum(total_engagements)",
-                      "expression": "SUM(`total_engagements`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(total_engagements)"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Total Engagements",
-                "showDescription": True,
-                "description": "All engagement records"
-              }
-            }
-          },
-          "position": {
-            "x": 5,
-            "y": 2,
-            "width": 1,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "chart_timeline",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_timeline",
-                  "fields": [
-                    {
-                      "name": "fy",
-                      "expression": "`fy`"
-                    },
-                    {
-                      "name": "sum(engagement_count)",
-                      "expression": "SUM(`engagement_count`)"
-                    },
-                    {
-                      "name": "eng_type",
-                      "expression": "`eng_type`"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "fy",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "y": {
-                  "fieldName": "sum(engagement_count)",
-                  "scale": {
-                    "type": "quantitative",
-                    "stackMode": "stacked"
-                  }
-                },
-                "color": {
-                  "fieldName": "eng_type",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "legend": {
-                    "position": "bottom"
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Engagements Over Time"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 4,
-            "width": 3,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "chart_format_mix",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_engagement_format_mix",
-                  "fields": [
-                    {
-                      "name": "eng_format",
-                      "expression": "`eng_format`"
-                    },
-                    {
-                      "name": "sum(cnt)",
-                      "expression": "SUM(`cnt`)"
-                    },
-                    {
-                      "name": "eng_type",
-                      "expression": "`eng_type`"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "eng_format",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "y": {
-                  "fieldName": "sum(cnt)",
-                  "scale": {
-                    "type": "quantitative",
-                    "stackMode": "stacked"
-                  }
-                },
-                "color": {
-                  "fieldName": "eng_type",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "legend": {
-                    "position": "bottom"
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Engagement Format Mix"
-              }
-            }
-          },
-          "position": {
-            "x": 3,
-            "y": 4,
-            "width": 3,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "chart_territory",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_territory",
-                  "fields": [
-                    {
-                      "name": "territory_area",
-                      "expression": "`territory_area`"
-                    },
-                    {
-                      "name": "sum(engagement_count)",
-                      "expression": "SUM(`engagement_count`)"
-                    },
-                    {
-                      "name": "eng_type",
-                      "expression": "`eng_type`"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "territory_area",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "y": {
-                  "fieldName": "sum(engagement_count)",
-                  "scale": {
-                    "type": "quantitative",
-                    "stackMode": "stacked"
-                  }
-                },
-                "color": {
-                  "fieldName": "eng_type",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "legend": {
-                    "position": "bottom"
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Engagements by Territory"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 9,
-            "width": 3,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "chart_territory_rev",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_territory",
-                  "fields": [
-                    {
-                      "name": "territory_area",
-                      "expression": "`territory_area`"
-                    },
-                    {
-                      "name": "sum(total_dbu_dollars)",
-                      "expression": "SUM(`total_dbu_dollars`)"
-                    },
-                    {
-                      "name": "eng_type",
-                      "expression": "`eng_type`"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "territory_area",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "y": {
-                  "fieldName": "sum(total_dbu_dollars)",
-                  "scale": {
-                    "type": "quantitative",
-                    "stackMode": "stacked"
-                  },
-                  "format": {
-                    "type": "number-currency",
-                    "currencyCode": "USD",
-                    "abbreviation": "compact-long",
-                    "decimalPlaces": {
-                      "type": "exact",
-                      "places": 0
-                    }
-                  }
-                },
-                "color": {
-                  "fieldName": "eng_type",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "legend": {
-                    "position": "bottom"
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Revenue by Territory ($)"
-              }
-            }
-          },
-          "position": {
-            "x": 3,
-            "y": 9,
-            "width": 3,
-            "height": 5
-          }
-        }
-        ,
-        # --- T-212 outcome tags ---
-        {
-          "widget": {
-            "name": "kpi_outcome_mix",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_activity_impact_tags",
-                  "fields": [
-                    {
-                      "name": "impact_tag",
-                      "expression": "`impact_tag`"
-                    },
-                    {
-                      "name": "count(*)",
-                      "expression": "COUNT(*)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "impact_tag",
-                  "scale": {"type": "categorical"},
-                  "displayName": "Outcome tag"
-                },
-                "y": {
-                  "fieldName": "count(*)",
-                  "scale": {"type": "quantitative"},
-                  "displayName": "Count"
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Outcome mix (all categories)",
-                "showDescription": True,
-                "description": "Counts of qualitative tags across all activity categories (T-212)"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 14,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "chart_outcomes_by_category",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_activity_impact_tags",
-                  "fields": [
-                    {
-                      "name": "category",
-                      "expression": "`category`"
-                    },
-                    {
-                      "name": "impact_tag",
-                      "expression": "`impact_tag`"
-                    },
-                    {
-                      "name": "count(*)",
-                      "expression": "COUNT(*)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "category",
-                  "scale": {"type": "categorical"},
-                  "displayName": "Category"
-                },
-                "y": {
-                  "fieldName": "count(*)",
-                  "scale": {
-                    "type": "quantitative",
-                    "stackMode": "percent"
-                  },
-                  "displayName": "Share of outcomes"
-                },
-                "color": {
-                  "fieldName": "impact_tag",
-                  "scale": {"type": "categorical"},
-                  "legend": {"position": "bottom"}
-                }
-              },
-              "frame": {
-                "showTitle": True,
-                "title": "Outcomes by category (100% stacked)"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 19,
-            "width": 6,
-            "height": 5
-          }
-        }
-        # --- end T-212 ---
-        ,
-        # --- T-214 windowed attribution KPI ---
-        {
-          "widget": {
-            "name": "kpi_influenced_revenue_windowed",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_influenced_revenue_windowed",
-                  "fields": [
-                    {
-                      "name": "sum(total_influenced_revenue_windowed)",
-                      "expression": "SUM(`total_influenced_revenue_windowed`)"
-                    }
-                  ],
-                  "disaggregated": False
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(total_influenced_revenue_windowed)",
+                  "fieldName": "sum(total_influenced_revenue)",
                   "format": {
                     "type": "number-currency",
                     "currencyCode": "USD",
@@ -2309,20 +2249,642 @@ SERIALIZED_DASHBOARD: dict = {
               },
               "frame": {
                 "showTitle": True,
-                "title": "Total influenced revenue (windowed)",
+                "title": "Influenced revenue",
                 "showDescription": True,
-                "description": "$DBU in attribution window: Focus = FY..FY+1, One-off = quarter +1..+4. T-214."
+                "description": "Windowed: Focus FY..FY+1, One-off Q+1..Q+4 (T-214)"
               }
             }
           },
-          "position": {
-            "x": 0,
-            "y": 24,
-            "width": 6,
-            "height": 3
-          }
+          "position": {"x": 0, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar1_uco_advances",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(uco_advances_count)", "expression": "SUM(`uco_advances_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(uco_advances_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "UCO advances",
+                "showDescription": True,
+                "description": "Stage progress within 90d of engagement start (T-213)"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar1_tagged_outcomes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(tagged_outcomes_count)", "expression": "SUM(`tagged_outcomes_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(tagged_outcomes_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Tagged outcomes",
+                "showDescription": True,
+                "description": "Customer activities with impact tags (T-212)"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 3, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "spark_pillar1_revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "sum(total_influenced_revenue)", "expression": "SUM(`total_influenced_revenue`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+                "y": {
+                  "fieldName": "sum(total_influenced_revenue)",
+                  "scale": {"type": "quantitative"},
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {"type": "exact", "places": 1}
+                  }
+                }
+              },
+              "frame": {"showTitle": True, "title": "Influenced revenue by FY"}
+            }
+          },
+          "position": {"x": 3, "y": 3, "width": 3, "height": 2}
+        },
+        # --- Pillar 2: Evangelism reach ---
+        {
+          "widget": {
+            "name": "pillar_evangelism_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## 2. Evangelism reach — who heard you\n",
+                "Events delivered, total reach (views + attendance), and what's coming in the next 30 days. **→ See full detail on the _Evangelism reach_ page.**"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 6, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar2_events_delivered",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(events_delivered)", "expression": "SUM(`events_delivered`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(events_delivered)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Events delivered",
+                "showDescription": True,
+                "description": "Talks, demos, workshops shipped"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 6, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar2_total_reach",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(total_reach)", "expression": "SUM(`total_reach`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(total_reach)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Total reach",
+                "showDescription": True,
+                "description": "Views + attendance across delivered events"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 6, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar2_planned_next_30d",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(events_planned_next_30d)", "expression": "SUM(`events_planned_next_30d`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(events_planned_next_30d)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Planned next 30d",
+                "showDescription": True,
+                "description": "Leading indicator — events on the calendar"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 6, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "spark_pillar2_reach",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "sum(total_reach)", "expression": "SUM(`total_reach`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+                "y": {"fieldName": "sum(total_reach)", "scale": {"type": "quantitative"}}
+              },
+              "frame": {"showTitle": True, "title": "Total reach by FY"}
+            }
+          },
+          "position": {"x": 3, "y": 6, "width": 3, "height": 2}
+        },
+        # --- Pillar 3: Initiative outcomes ---
+        {
+          "widget": {
+            "name": "pillar_initiatives_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## 3. Initiative outcomes — what shipped internally\n",
+                "Active and completed initiatives, plus those with CXO sponsorship signals. **→ See full detail on the _Initiative outcomes_ page.**"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 8, "width": 6, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar3_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(active_initiatives)", "expression": "SUM(`active_initiatives`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(active_initiatives)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Active initiatives",
+                "showDescription": True,
+                "description": "status = active"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 9, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar3_completed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(completed_initiatives_fy)", "expression": "SUM(`completed_initiatives_fy`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(completed_initiatives_fy)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Completed FY",
+                "showDescription": True,
+                "description": "status = complete"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 9, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar3_cxo_sponsored",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(cxo_sponsored_count)", "expression": "SUM(`cxo_sponsored_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(cxo_sponsored_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "CXO-sponsored",
+                "showDescription": True,
+                "description": "Initiatives with >=1 CXO exec_meeting"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 9, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "spark_pillar3_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "sum(active_initiatives)", "expression": "SUM(`active_initiatives`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+                "y": {"fieldName": "sum(active_initiatives)", "scale": {"type": "quantitative"}}
+              },
+              "frame": {"showTitle": True, "title": "Active initiatives by FY"}
+            }
+          },
+          "position": {"x": 3, "y": 9, "width": 3, "height": 2}
+        },
+        # --- Pillar 4: Relationship depth ---
+        {
+          "widget": {
+            "name": "pillar_relationships_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## 4. Relationship depth — who trusts you\n",
+                "Distinct CXO contacts, accounts where you're at the table, and accounts where the relationship is warm but no work is in flight. **→ See full detail on the _Relationship depth_ page.**"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 6, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar4_cxos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(distinct_cxos)", "expression": "SUM(`distinct_cxos`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(distinct_cxos)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Distinct CXOs",
+                "showDescription": True,
+                "description": "Unique CXO-level exec contacts in FY"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 12, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar4_accounts_with_cxo",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "sum(accounts_with_cxo)", "expression": "SUM(`accounts_with_cxo`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "sum(accounts_with_cxo)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Accounts w/ CXO",
+                "showDescription": True,
+                "description": "Distinct accounts with >=1 CXO meeting in FY"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 12, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar4_cxo_gap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "max(cxo_gap_count)", "expression": "MAX(`cxo_gap_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "max(cxo_gap_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "CXO gap (no work)",
+                "showDescription": True,
+                "description": "Accounts w/ recent CXO meeting but no engagement (180d)"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 12, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "spark_pillar4_cxos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {"name": "sum(distinct_cxos)", "expression": "SUM(`distinct_cxos`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+                "y": {"fieldName": "sum(distinct_cxos)", "scale": {"type": "quantitative"}}
+              },
+              "frame": {"showTitle": True, "title": "Distinct CXOs by FY"}
+            }
+          },
+          "position": {"x": 3, "y": 12, "width": 3, "height": 2}
+        },
+        # --- Pillar 5: Portfolio readiness ---
+        {
+          "widget": {
+            "name": "pillar_readiness_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## 5. Portfolio readiness — what needs your attention now\n",
+                "Worklist counts: Focus without plan, open ASQs without next steps, stalled initiatives. Current-state (not FY-bound). **→ See full detail on the _Portfolio readiness_ page.**"
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 14, "width": 6, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar5_focus_no_plan",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "max(focus_without_plan_count)", "expression": "MAX(`focus_without_plan_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "max(focus_without_plan_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Focus w/o plan",
+                "showDescription": True,
+                "description": "No planning session in last 90d"
+              }
+            }
+          },
+          "position": {"x": 0, "y": 15, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar5_open_asqs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "max(open_asqs_needing_attention_count)", "expression": "MAX(`open_asqs_needing_attention_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "max(open_asqs_needing_attention_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Open ASQs",
+                "showDescription": True,
+                "description": "Open + empty next_steps for >=14d"
+              }
+            }
+          },
+          "position": {"x": 1, "y": 15, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi_pillar5_stalled",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "max(stalled_initiatives_count)", "expression": "MAX(`stalled_initiatives_count`)"}
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "max(stalled_initiatives_count)"}},
+              "frame": {
+                "showTitle": True,
+                "title": "Stalled initiatives",
+                "showDescription": True,
+                "description": "status=active, no activity 30d+"
+              }
+            }
+          },
+          "position": {"x": 2, "y": 15, "width": 1, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "spark_pillar5_worklist",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_portfolio_pillars",
+                  "fields": [
+                    {"name": "fy", "expression": "`fy`"},
+                    {
+                      "name": "worklist_total",
+                      "expression": "MAX(`focus_without_plan_count`) + MAX(`open_asqs_needing_attention_count`) + MAX(`stalled_initiatives_count`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "fy", "scale": {"type": "categorical"}},
+                "y": {"fieldName": "worklist_total", "scale": {"type": "quantitative"}}
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Total worklist (sum of all 3)",
+                "showDescription": True,
+                "description": "Current-state — flat across FYs; will change as worklist evolves"
+              }
+            }
+          },
+          "position": {"x": 3, "y": 15, "width": 3, "height": 2}
         }
-        # --- end T-214 windowed attribution KPI ---
+        # --- end T-224 portfolio pillars layout ---
+        #
+        # --- T-224 old layout (rollback) ---
+        # The previous Executive Summary layout (1 header + 6 customer-only
+        # KPI counters from ds_impact_kpis + 4 bar charts + 2 T-212 outcome
+        # panels + 1 T-214 windowed-revenue counter) is preserved as
+        # _OLD_P_EXEC_SUMMARY_LAYOUT_ROLLBACK at the top of this module.
+        # To roll back: splice that list into this `layout` array in place
+        # of the T-224 widgets above. The widgets it references (ds_impact_kpis,
+        # ds_timeline, ds_engagement_format_mix, ds_territory,
+        # ds_activity_impact_tags, ds_influenced_revenue_windowed) all
+        # still exist in the datasets array.
+        # --- end T-224 old layout (rollback) ---
       ],
       "pageType": "PAGE_TYPE_CANVAS"
     },
