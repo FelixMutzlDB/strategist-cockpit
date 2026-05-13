@@ -23,6 +23,21 @@ WAREHOUSE_ID = "927ac096f9833442"
 DISPLAY_NAME = "Strategist Impact Dashboard (Felix)"
 PARENT_PATH  = "/Users/felix.mutzl@databricks.com"
 
+# Attribution windows for revenue datasets (T-214).
+# Rationale: a wide `fiscal_year BETWEEN 2024 AND 2027` filter includes years
+# before the engagement happened, which conflates tenure with impact. The
+# windows below restrict each engagement's revenue contribution to the period
+# in which the strategist could plausibly have moved the number.
+#
+# One-off engagements: revenue from quarter +1..+4 inclusive (one full year
+# AFTER the engagement quarter — exclude the engagement quarter itself so we
+# measure influence, not baseline).
+# Focus engagements: revenue from engagement_FY..engagement_FY+1 inclusive
+# (the engagement FY plus the immediate follow-on year — Focus accounts run
+# multi-quarter, so the engagement FY revenue *is* part of the impact window).
+ONEOFF_WINDOW_QUARTERS = (1, 4)  # engagement_quarter +1 .. +4 inclusive
+FOCUS_WINDOW_FYS = (0, 1)        # engagement_FY .. engagement_FY+1 inclusive
+
 
 # -- Dashboard definition ----------------------------------------------------
 SERIALIZED_DASHBOARD: dict = {
@@ -91,6 +106,27 @@ SERIALIZED_DASHBOARD: dict = {
       "name": "ds_focus_revenue",
       "displayName": "focus_account_revenue",
       "queryLines": [
+        # T-214: windowed attribution — only the engagement FY and FY+1 contribute.
+        # Old wide-window WHERE: c.fiscal_year BETWEEN 2024 AND 2027 (rollback: see commit message).
+        "WITH eng AS (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot, fy),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "),\n",
+        "focus_eng AS (\n",
+        "  -- T-214 windowed: derive engagement_fy_int and window bounds per Focus engagement.\n",
+        "  SELECT e.*, \n",
+        "    CAST('20' || SUBSTRING(e.fy_clean, 3, 2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng e\n",
+        "  WHERE e.engagement_type = 'Focus'\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND REGEXP_LIKE(e.fy_clean, '^FY[0-9]{2}$')\n",
+        ")\n",
         "SELECT\n",
         "  e.customer AS account_name,\n",
         "  c.usage_date_string,\n",
@@ -103,21 +139,13 @@ SERIALIZED_DASHBOARD: dict = {
         "  ROUND(SUM(c.dbu_dollars_ai)) AS dbu_dollars_ai,\n",
         "  ROUND(SUM(c.dbu_dollars_sql)) AS dbu_dollars_sql,\n",
         "  ROUND(SUM(c.dbu_dollars_uc)) AS dbu_dollars_uc\n",
-        "FROM (\n",
-        "  SELECT\n",
-        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
-        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
-        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
-        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
-        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
-        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
-        ") e\n",
+        "FROM focus_eng e\n",
         "LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
         "  ON e.account_id = c.account_id\n",
-        "WHERE e.engagement_type = 'Focus'\n",
-        "  AND c.date_grain = 'quarterly'\n",
-        "  AND c.fiscal_year BETWEEN 2024 AND 2027\n",
+        # T-214: windowed — restrict to engagement_FY..engagement_FY+1 inclusive.
+        "WHERE c.date_grain = 'quarterly'\n",
         "  AND c.bu1 = 'Central'\n",
+        "  AND c.fiscal_year BETWEEN e.engagement_fy_int AND e.engagement_fy_int + 1\n",
         "GROUP BY e.customer, c.usage_date_string, c.fiscal_year, c.usage_date_fiscal_quarter_start, c.usage_date\n",
         "ORDER BY e.customer, c.usage_date_fiscal_quarter_start\n"
       ]
@@ -126,30 +154,51 @@ SERIALIZED_DASHBOARD: dict = {
       "name": "ds_advisor_benchmark",
       "displayName": "advisor_vs_region_benchmark",
       "queryLines": [
-        "SELECT * FROM (\n",
+        # T-214: windowed advisor side — each Focus engagement contributes only
+        # in FY..FY+1. Region side stays Central-wide so YoY comparison remains
+        # apples-to-apples on the fiscal_years that the advisor portfolio touches.
+        # Old wide-window filter: c.fiscal_year BETWEEN 2024 AND 2027 (rollback: see commit msg).
+        "WITH eng AS (\n",
+        "  SELECT\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot, fy),\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean,\n",
+        "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "),\n",
+        "focus_eng AS (\n",
+        "  -- T-214 windowed: bound each Focus engagement to FY..FY+1.\n",
+        "  SELECT e.*,\n",
+        "    CAST('20' || SUBSTRING(e.fy_clean, 3, 2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng e\n",
+        "  WHERE e.engagement_type = 'Focus'\n",
+        "    AND e.account_id IS NOT NULL\n",
+        "    AND REGEXP_LIKE(e.fy_clean, '^FY[0-9]{2}$')\n",
+        "),\n",
+        "advisor_windowed AS (\n",
+        "  -- T-214 windowed: filter c.fiscal_year by the per-engagement window BEFORE SUM.\n",
         "  SELECT\n",
         "    'Focus' AS portfolio_type,\n",
-        "    fiscal_year,\n",
-        "    ROUND(SUM(dbu_dollars)) AS advisor_total_dbu_dollars,\n",
-        "    try_divide(\n",
-        "      (SUM(dbu_dollars) - LAG(SUM(dbu_dollars)) OVER (ORDER BY fiscal_year)),\n",
-        "      LAG(SUM(dbu_dollars)) OVER (ORDER BY fiscal_year)\n",
-        "    ) AS advisor_yoy_growth\n",
-        "  FROM (\n",
-        "    SELECT\n",
-        "      src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
-        "      NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
-        "      NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
-        "      NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
-        "      COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
-        "    FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
-        "  ) e\n",
+        "    c.fiscal_year,\n",
+        "    ROUND(SUM(c.dbu_dollars)) AS advisor_total_dbu_dollars\n",
+        "  FROM focus_eng e\n",
         "  LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
-        "  WHERE e.engagement_type = 'Focus'\n",
-        "    AND c.date_grain = 'quarterly' AND c.fiscal_year BETWEEN 2024 AND 2027 AND c.bu1 = 'Central'\n",
-        "  GROUP BY fiscal_year\n",
-        ") advisor\n",
-        "JOIN (\n",
+        "  WHERE c.date_grain = 'quarterly' AND c.bu1 = 'Central'\n",
+        "    AND c.fiscal_year BETWEEN e.engagement_fy_int AND e.engagement_fy_int + 1\n",
+        "  GROUP BY c.fiscal_year\n",
+        "),\n",
+        "advisor AS (\n",
+        "  SELECT\n",
+        "    portfolio_type, fiscal_year, advisor_total_dbu_dollars,\n",
+        "    try_divide(\n",
+        "      (advisor_total_dbu_dollars - LAG(advisor_total_dbu_dollars) OVER (ORDER BY fiscal_year)),\n",
+        "      LAG(advisor_total_dbu_dollars) OVER (ORDER BY fiscal_year)\n",
+        "    ) AS advisor_yoy_growth\n",
+        "  FROM advisor_windowed\n",
+        "),\n",
+        "region AS (\n",
         "  SELECT\n",
         "    fiscal_year AS region_fiscal_year,\n",
         "    ROUND(SUM(dbu_dollars)) AS region_total_dbu_dollars,\n",
@@ -158,38 +207,81 @@ SERIALIZED_DASHBOARD: dict = {
         "      LAG(SUM(dbu_dollars)) OVER (ORDER BY fiscal_year)\n",
         "    ) AS region_yoy_growth\n",
         "  FROM main.gtm_gold.rpt_c360_overview_unpivoted\n",
+        # T-214: region baseline stays at the static 2024..2027 envelope — region
+        # benchmark is a "what would average have looked like" comparison; varying
+        # its window per engagement would defeat the apples-to-apples intent.
         "  WHERE date_grain = 'quarterly' AND fiscal_year BETWEEN 2024 AND 2027 AND bu1 = 'Central'\n",
         "  GROUP BY fiscal_year\n",
-        ") region ON advisor.fiscal_year = region.region_fiscal_year\n"
+        ")\n",
+        "SELECT * FROM advisor\n",
+        "JOIN region ON advisor.fiscal_year = region.region_fiscal_year\n"
       ]
     },
     {
       "name": "ds_accounts_yoy",
       "displayName": "accounts_yoy_growth",
       "queryLines": [
-        "SELECT\n",
-        "  e.customer AS account_name,\n",
-        "  e.engagement_type,\n",
-        "  e.engagement_format,\n",
-        "  c.fiscal_year,\n",
-        "  ROUND(SUM(c.dbu_dollars)) AS dbu_dollars,\n",
-        "  try_divide(\n",
-        "    (SUM(c.dbu_dollars) - LAG(SUM(c.dbu_dollars)) OVER (PARTITION BY e.customer ORDER BY c.fiscal_year)),\n",
-        "    LAG(SUM(c.dbu_dollars)) OVER (PARTITION BY e.customer ORDER BY c.fiscal_year)\n",
-        "  ) AS yoy_growth\n",
-        "FROM (\n",
+        # T-214: windowed attribution per engagement type. Focus: FY..FY+1.
+        # One-off: revenue from the four quarters after the engagement quarter
+        # (mapped back to fiscal_year via usage_date_fiscal_quarter_start). Each
+        # engagement contributes revenue ONLY in its own window — orphans
+        # (missing fy/quarter or NULL account_id) are excluded.
+        # Old wide-window filter: c.fiscal_year BETWEEN 2024 AND 2027.
+        "WITH eng AS (\n",
         "  SELECT\n",
-        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot),\n",
+        "    src.* EXCEPT(engagement_type, engagement_format, quarter, account_executive, ae_snapshot, fy),\n",
         "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
         "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_format, '')), '[\\r\\n]', ''), '') AS engagement_format,\n",
         "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean,\n",
         "    COALESCE(src.account_executive, src.ae_snapshot) AS ae\n",
         "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
-        ") e\n",
-        "LEFT JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
-        "WHERE c.date_grain = 'quarterly' AND c.fiscal_year BETWEEN 2024 AND 2027 AND c.bu1 = 'Central'\n",
-        "GROUP BY e.customer, e.engagement_type, e.engagement_format, c.fiscal_year\n",
-        "ORDER BY e.customer, c.fiscal_year\n"
+        "  WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        "focus_eng AS (\n",
+        "  SELECT e.*, CAST('20'||SUBSTRING(e.fy_clean,3,2) AS INT) AS engagement_fy_int\n",
+        "  FROM eng e\n",
+        "  WHERE e.engagement_type = 'Focus' AND REGEXP_LIKE(e.fy_clean,'^FY[0-9]{2}$')\n",
+        "),\n",
+        "oneoff_eng AS (\n",
+        "  SELECT e.*,\n",
+        "    make_date(CAST('20'||SUBSTRING(e.quarter,3,2) AS INT)-1,\n",
+        "      CASE SUBSTRING(e.quarter,6,1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1) AS engagement_quarter_start\n",
+        "  FROM eng e\n",
+        "  WHERE e.engagement_type = 'One-off' AND REGEXP_LIKE(e.quarter,'^FY[0-9]{2}Q[1-4]$')\n",
+        "),\n",
+        # T-214: windowed Focus contribution (FY..FY+1).
+        "focus_rev AS (\n",
+        "  SELECT e.customer, e.engagement_type, e.engagement_format, c.fiscal_year, c.dbu_dollars\n",
+        "  FROM focus_eng e\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
+        "  WHERE c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "    AND c.fiscal_year BETWEEN e.engagement_fy_int AND e.engagement_fy_int + 1\n",
+        "),\n",
+        # T-214: windowed One-off contribution (engagement_quarter +1..+4 by date).
+        "oneoff_rev AS (\n",
+        "  SELECT e.customer, e.engagement_type, e.engagement_format, c.fiscal_year, c.dbu_dollars\n",
+        "  FROM oneoff_eng e\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c ON e.account_id = c.account_id\n",
+        "  WHERE c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "    AND c.usage_date_fiscal_quarter_start BETWEEN add_months(e.engagement_quarter_start, 3) AND add_months(e.engagement_quarter_start, 12)\n",
+        "),\n",
+        "rev_unioned AS (\n",
+        "  SELECT * FROM focus_rev UNION ALL SELECT * FROM oneoff_rev\n",
+        ")\n",
+        "SELECT\n",
+        "  customer AS account_name,\n",
+        "  engagement_type,\n",
+        "  engagement_format,\n",
+        "  fiscal_year,\n",
+        "  ROUND(SUM(dbu_dollars)) AS dbu_dollars,\n",
+        "  try_divide(\n",
+        "    (SUM(dbu_dollars) - LAG(SUM(dbu_dollars)) OVER (PARTITION BY customer ORDER BY fiscal_year)),\n",
+        "    LAG(SUM(dbu_dollars)) OVER (PARTITION BY customer ORDER BY fiscal_year)\n",
+        "  ) AS yoy_growth\n",
+        "FROM rev_unioned\n",
+        "GROUP BY customer, engagement_type, engagement_format, fiscal_year\n",
+        "ORDER BY customer, fiscal_year\n"
       ]
     },
     {
@@ -359,6 +451,13 @@ SERIALIZED_DASHBOARD: dict = {
       "name": "ds_oneoff_impact_summary",
       "displayName": "oneoff_impact_summary",
       "queryLines": [
+        # T-214: windowed attribution — offsets restricted to the
+        # ONEOFF_WINDOW_QUARTERS range (+1..+4). Offset 0 (the engagement
+        # quarter) is the growth baseline anchor — kept in account_dbu / region_dbu
+        # so FIRST_VALUE in `joined` has something to divide against, then dropped
+        # from the final SELECT so reported series only cover the in-window
+        # offsets. This was previously offsets 0..4 in the final output, which
+        # leaked baseline noise into the impact summary.
         "WITH eng AS (\n",
         "  SELECT\n",
         "    src.account_id, src.customer, src.strategist_email,\n",
@@ -375,6 +474,8 @@ SERIALIZED_DASHBOARD: dict = {
         "    END AS engagement_quarter_start\n",
         "  FROM eng WHERE engagement_type = 'One-off' AND quarter IS NOT NULL\n",
         "),\n",
+        # T-214: offsets 0..4 — 0 retained as baseline anchor for growth FIRST_VALUE;
+        # final SELECT drops offset 0 so only +1..+4 (ONEOFF_WINDOW_QUARTERS) ships.
         "eng_offsets AS (\n",
         "  SELECT e.*, o.qtr_offset, add_months(e.engagement_quarter_start, 3 * o.qtr_offset) AS target_quarter\n",
         "  FROM eng_dated e\n",
@@ -406,11 +507,12 @@ SERIALIZED_DASHBOARD: dict = {
         "               FIRST_VALUE(rd.region_avg_dbu) OVER (PARTITION BY ad.engagement_quarter_start ORDER BY ad.qtr_offset)) AS region_growth\n",
         "  FROM account_dbu ad LEFT JOIN region_dbu rd ON rd.target_quarter = ad.target_quarter\n",
         ")\n",
+        # T-214: WHERE qtr_offset BETWEEN 1 AND 4 — drop baseline (offset 0) from reported series.
         "SELECT CAST(qtr_offset AS STRING) AS qtr_offset, 'Advisor portfolio (avg)' AS series, AVG(account_growth) AS avg_growth, COUNT(DISTINCT account_id) AS n_accounts\n",
-        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL GROUP BY qtr_offset\n",
+        "FROM joined WHERE strategist_email IS NOT NULL AND account_growth IS NOT NULL AND qtr_offset BETWEEN 1 AND 4 GROUP BY qtr_offset\n",
         "UNION ALL\n",
         "SELECT CAST(qtr_offset AS STRING) AS qtr_offset, 'Central region (avg)' AS series, AVG(region_growth) AS avg_growth, NULL AS n_accounts\n",
-        "FROM joined WHERE region_growth IS NOT NULL GROUP BY qtr_offset\n",
+        "FROM joined WHERE region_growth IS NOT NULL AND qtr_offset BETWEEN 1 AND 4 GROUP BY qtr_offset\n",
         "ORDER BY qtr_offset, series\n"
       ]
     },
@@ -418,6 +520,12 @@ SERIALIZED_DASHBOARD: dict = {
       "name": "ds_focus_impact_summary",
       "displayName": "focus_impact_summary",
       "queryLines": [
+        # T-214: windowed attribution — offsets 0..1 already match
+        # FOCUS_WINDOW_FYS = (0, 1) by construction. Offset 0 = engagement FY
+        # baseline (kept as growth anchor); offset 1 = engagement FY + 1
+        # (the in-window follow-on year). No structural change needed here vs.
+        # the pre-T-214 version — this comment documents the alignment so it
+        # doesn't drift later.
         "WITH eng AS (\n",
         "  SELECT src.account_id, src.customer, src.strategist_email,\n",
         "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
@@ -432,6 +540,8 @@ SERIALIZED_DASHBOARD: dict = {
         "current_fy AS (\n",
         "  SELECT CASE WHEN MONTH(current_date()) >= 2 THEN YEAR(current_date()) + 1 ELSE YEAR(current_date()) END AS fy_int\n",
         "),\n",
+        # T-214: offsets 0..1 = FOCUS_WINDOW_FYS (0, 1). Closed-FY filter
+        # complements the window — drops in-progress FY rows for fairness.
         "focus_offsets AS (\n",
         "  SELECT f.*, o.fy_offset, f.engagement_fy_int + o.fy_offset AS target_fy\n",
         "  FROM focus_engagements f CROSS JOIN (SELECT 0 AS fy_offset UNION ALL SELECT 1) o\n",
@@ -472,6 +582,71 @@ SERIALIZED_DASHBOARD: dict = {
         "ORDER BY fy_offset, series\n"
       ]
     },
+    # --- T-214 windowed attribution: total influenced revenue tile ---
+    {
+      "name": "ds_influenced_revenue_windowed",
+      "displayName": "influenced_revenue_windowed",
+      "queryLines": [
+        # T-214: total influenced revenue across all engaged accounts, summed
+        # over the union of in-window (account_id, fiscal_quarter_start) pairs.
+        # Dedupes quarters that fall into multiple engagement windows
+        # (one account engaged via Focus AND One-off → each quarter counted once).
+        # NULL account_id (orphan manual rows) is excluded via `account_id IS NOT NULL`.
+        "WITH eng AS (\n",
+        "  SELECT src.account_id,\n",
+        "    NULLIF(REGEXP_REPLACE(TRIM(COALESCE(src.engagement_type, '')), '[\\r\\n]', ''), '') AS engagement_type,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.quarter, '')), '-', ''), '[\\r\\n]', ''), '') AS quarter,\n",
+        "    NULLIF(REGEXP_REPLACE(REPLACE(TRIM(COALESCE(src.fy, '')), '-', ''), '[\\r\\n]', ''), '') AS fy_clean\n",
+        "  FROM main.field_strategist_cockpit.v_customer_engagements_unified src\n",
+        "  WHERE src.account_id IS NOT NULL\n",
+        "),\n",
+        # T-214: Focus windows = FY..FY+1; collect every quarter falling in any Focus window.
+        "focus_target_qtrs AS (\n",
+        "  SELECT DISTINCT f.account_id, c.usage_date_fiscal_quarter_start, c.fiscal_year\n",
+        "  FROM (\n",
+        "    SELECT DISTINCT account_id, CAST('20'||SUBSTRING(fy_clean,3,2) AS INT) AS engagement_fy_int\n",
+        "    FROM eng WHERE engagement_type='Focus' AND REGEXP_LIKE(fy_clean,'^FY[0-9]{2}$')\n",
+        "  ) f\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = f.account_id\n",
+        "   AND c.fiscal_year BETWEEN f.engagement_fy_int AND f.engagement_fy_int + 1\n",
+        "   AND c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "),\n",
+        # T-214: One-off windows = engagement_quarter +1..+4; collect every quarter in any one-off window.
+        "oneoff_target_qtrs AS (\n",
+        "  SELECT DISTINCT o.account_id, c.usage_date_fiscal_quarter_start, c.fiscal_year\n",
+        "  FROM (\n",
+        "    SELECT DISTINCT account_id,\n",
+        "      make_date(CAST('20'||SUBSTRING(quarter,3,2) AS INT)-1,\n",
+        "        CASE SUBSTRING(quarter,6,1) WHEN '1' THEN 2 WHEN '2' THEN 5 WHEN '3' THEN 8 WHEN '4' THEN 11 END, 1) AS engagement_quarter_start\n",
+        "    FROM eng WHERE engagement_type='One-off' AND REGEXP_LIKE(quarter,'^FY[0-9]{2}Q[1-4]$')\n",
+        "  ) o\n",
+        "  JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "    ON c.account_id = o.account_id\n",
+        "   AND c.usage_date_fiscal_quarter_start BETWEEN add_months(o.engagement_quarter_start, 3) AND add_months(o.engagement_quarter_start, 12)\n",
+        "   AND c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "),\n",
+        # T-214: UNION (not UNION ALL) — dedupe (account_id, quarter) pairs that
+        # fall in BOTH a Focus and a One-off window for the same account.
+        "all_periods AS (\n",
+        "  SELECT account_id, usage_date_fiscal_quarter_start, fiscal_year FROM focus_target_qtrs\n",
+        "  UNION\n",
+        "  SELECT account_id, usage_date_fiscal_quarter_start, fiscal_year FROM oneoff_target_qtrs\n",
+        ")\n",
+        "SELECT\n",
+        "  p.fiscal_year AS fy,\n",
+        "  ROUND(SUM(c.dbu_dollars)) AS total_influenced_revenue_windowed,\n",
+        "  COUNT(DISTINCT p.account_id) AS n_engaged_accounts\n",
+        "FROM all_periods p\n",
+        "JOIN main.gtm_gold.rpt_c360_overview_unpivoted c\n",
+        "  ON c.account_id = p.account_id\n",
+        " AND c.usage_date_fiscal_quarter_start = p.usage_date_fiscal_quarter_start\n",
+        "WHERE c.date_grain='quarterly' AND c.bu1='Central'\n",
+        "GROUP BY p.fiscal_year\n",
+        "ORDER BY p.fiscal_year\n"
+      ]
+    },
+    # --- end T-214 windowed attribution tile dataset ---
     {
       "name": "ds_oneoff_impact_summary_median",
       "displayName": "oneoff_impact_summary_median",
@@ -2098,6 +2273,56 @@ SERIALIZED_DASHBOARD: dict = {
           }
         }
         # --- end T-212 ---
+        ,
+        # --- T-214 windowed attribution KPI ---
+        {
+          "widget": {
+            "name": "kpi_influenced_revenue_windowed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_influenced_revenue_windowed",
+                  "fields": [
+                    {
+                      "name": "sum(total_influenced_revenue_windowed)",
+                      "expression": "SUM(`total_influenced_revenue_windowed`)"
+                    }
+                  ],
+                  "disaggregated": False
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_influenced_revenue_windowed)",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "USD",
+                    "abbreviation": "compact-long",
+                    "decimalPlaces": {"type": "exact", "places": 1}
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": True,
+                "title": "Total influenced revenue (windowed)",
+                "showDescription": True,
+                "description": "$DBU in attribution window: Focus = FY..FY+1, One-off = quarter +1..+4. T-214."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 6,
+            "height": 3
+          }
+        }
+        # --- end T-214 windowed attribution KPI ---
       ],
       "pageType": "PAGE_TYPE_CANVAS"
     },
