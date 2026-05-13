@@ -135,6 +135,33 @@ The "Strategist Impact Dashboard" is defined in `scripts/build_dashboard.py` (La
 
 **Embed prerequisite:** a workspace admin must allowlist the app's host under **Settings → Security → External access → Embed dashboards** before the iframe will render. The CSP `frame-src` host is also configured via the `CSP_FRAME_SRC` env var (set to the workspace host, space-separated if multiple).
 
+#### Impact dashboard semantics
+
+Revenue datasets attribute consumption to engagements via **per-engagement attribution windows** rather than a global FY range (T-214). The window definitions live as constants at the top of `scripts/build_dashboard.py`:
+
+| Engagement type | Constant | Window (inclusive) | Rationale |
+|---|---|---|---|
+| One-off | `ONEOFF_WINDOW_QUARTERS = (1, 4)` | engagement_quarter +1 .. +4 | A topic-specific engagement plausibly moves the number within one year. Exclude the engagement quarter itself so we measure influence, not baseline. |
+| Focus | `FOCUS_WINDOW_FYS = (0, 1)` | engagement_FY .. engagement_FY+1 | Multi-quarter Focus runs across the full engagement FY; carry-over impact lands in the following FY. Include FY 0 so a Focus account engaged in FY26 contributes FY26 + FY27 revenue. |
+
+**Why windows beat a flat `fiscal_year BETWEEN 2024 AND 2027` filter:** the flat filter credits revenue from years before the strategist could possibly have influenced it (tenure, not impact). A Focus account engaged in FY26 would otherwise contribute FY24 + FY25 revenue to the "advisor portfolio" total — those years happened before the engagement, so they belong in the baseline, not the impact number.
+
+**Datasets that apply the windows:**
+
+- `ds_focus_revenue` — quarterly Focus revenue, filtered to each Focus engagement's FY..FY+1.
+- `ds_advisor_benchmark` — advisor-portfolio side is windowed (Focus FY..FY+1); the Central-region baseline retains its static 2024..2027 envelope so the YoY comparison stays apples-to-apples on the region.
+- `ds_accounts_yoy` — per-account YoY uses each engagement's own window (Focus → FY..FY+1; One-off → quarter +1..+4 by date).
+- `ds_oneoff_impact_summary` — the qtr_offset CTE already encodes the window structure; offset 0 is kept as the growth-rate baseline anchor (so FIRST_VALUE in the growth calc has something to divide against), then dropped from the final reported series so only offsets 1..4 ship.
+- `ds_focus_impact_summary` — already uses fy_offset 0..1, which matches `FOCUS_WINDOW_FYS` exactly. No structural change; a documenting comment was added in T-214 so the alignment doesn't drift.
+
+**New dataset:** `ds_influenced_revenue_windowed` powers the "Total influenced revenue (windowed)" KPI tile on the Executive Summary page. It computes the SUM of `dbu_dollars` across the UNION of (account_id, fiscal_quarter_start) pairs in any engagement's window — so a quarter that falls into both a Focus and a One-off window for the same account is counted once, not twice. Orphan engagements (NULL `account_id`) contribute zero by construction.
+
+**Edge cases:**
+
+- An engagement with `account_id IS NULL` (manual orphan) is excluded from every windowed dataset — there's no account to join revenue against.
+- An engagement with a malformed `fy` or `quarter` (regex mismatch) is filtered out by the `REGEXP_LIKE` guards in the CTEs. The dataset returns no rows for that engagement rather than failing.
+- An account engaged via both a Focus (FY26) and a One-off (FY25Q3): each engagement's window is computed independently, then the influenced-revenue tile unions them. The per-engagement-type datasets (`ds_focus_revenue`, etc.) only see their own type's window.
+
 ### Genie Space
 
 "Strategist Cockpit Genie" provides natural language queries over the unified engagement view and revenue data. Embedded in the app at `/ask` (T-202, closed). Same workspace allowlisting prerequisite as the dashboard. Genie iframe embedding is currently in Beta — check the `/embed/genie/<id>` URL pattern matches your workspace's release.
